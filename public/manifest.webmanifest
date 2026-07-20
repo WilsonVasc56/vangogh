@@ -1,0 +1,28 @@
+{
+  "name": "Museu Van Gogh — Experiência Imersiva",
+  "short_name": "Museu Van Gogh",
+  "description": "Explore a vida e as obras de Vincent van Gogh em um museu virtual imersivo.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "orientation": "any",
+  "categories": ["art", "education", "entertainment"],
+  "icons": [
+    {
+      "src": "/icon",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
