@@ -16,9 +16,19 @@ import { periods, type PeriodId } from "@/data/periods";
 
 interface MuseumSceneProps {
   active: boolean;
+  isMobile: boolean;
+  mobileInput: MutableRefObject<MobileInput>;
+  interactionToken: number;
   onArtworkSelect: (artwork: Artwork) => void;
   onPointerLockChange: (locked: boolean) => void;
   onRoomChange: (period: PeriodId | null) => void;
+}
+
+export interface MobileInput {
+  forward: number;
+  strafe: number;
+  lookX: number;
+  lookY: number;
 }
 
 interface RoomConfig {
@@ -243,6 +253,9 @@ function resolveRoomDecorMovement(
 
 function GalleryControls({
   active,
+  isMobile,
+  mobileInput,
+  interactionToken,
   entranceOpen,
   internalDoorsOpen,
   doorRegistry,
@@ -254,6 +267,9 @@ function GalleryControls({
   onRoomChange,
 }: {
   active: boolean;
+  isMobile: boolean;
+  mobileInput: MutableRefObject<MobileInput>;
+  interactionToken: number;
   entranceOpen: boolean;
   internalDoorsOpen: boolean[];
   doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
@@ -270,6 +286,7 @@ function GalleryControls({
   const pitch = useRef(0);
   const raycaster = useRef(new THREE.Raycaster());
   const currentRoom = useRef<PeriodId | null>(null);
+  const processedInteraction = useRef(interactionToken);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -290,19 +307,26 @@ function GalleryControls({
       );
     };
     const onPointerLock = () => onPointerLockChange(document.pointerLockElement === canvas);
-    const onClick = () => {
+    const interactAtReticle = () => {
       raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
       const doorHit = raycaster.current.intersectObjects([...doorRegistry.current], false)[0];
       if (doorHit && doorHit.distance < 35 && !entranceOpen) onEntranceClick();
 
-      if (document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock();
-        return;
-      }
-
       const hit = raycaster.current.intersectObjects([...registry.current.keys()], false)[0];
       const artwork = hit && hit.distance < 9 ? registry.current.get(hit.object) : undefined;
       if (artwork) onArtworkSelect(artwork);
+    };
+    const onClick = () => {
+      if (isMobile) {
+        interactAtReticle();
+        return;
+      }
+      if (document.pointerLockElement !== canvas) {
+        interactAtReticle();
+        canvas.requestPointerLock();
+        return;
+      }
+      interactAtReticle();
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -325,10 +349,31 @@ function GalleryControls({
     onArtworkSelect,
     onEntranceClick,
     onPointerLockChange,
+    isMobile,
     registry,
   ]);
 
   useFrame((_, delta) => {
+    if (isMobile) {
+      yaw.current -= mobileInput.current.lookX * 0.003;
+      pitch.current = THREE.MathUtils.clamp(
+        pitch.current - mobileInput.current.lookY * 0.003,
+        -1.2,
+        1.2,
+      );
+      mobileInput.current.lookX = 0;
+      mobileInput.current.lookY = 0;
+
+      if (interactionToken !== processedInteraction.current) {
+        processedInteraction.current = interactionToken;
+        raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const doorHit = raycaster.current.intersectObjects([...doorRegistry.current], false)[0];
+        if (doorHit && doorHit.distance < 35 && !entranceOpen) onEntranceClick();
+        const hit = raycaster.current.intersectObjects([...registry.current.keys()], false)[0];
+        const artwork = hit && hit.distance < 9 ? registry.current.get(hit.object) : undefined;
+        if (artwork) onArtworkSelect(artwork);
+      }
+    }
     camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
 
     internalDoorBoundaries.forEach((boundary, index) => {
@@ -346,7 +391,7 @@ function GalleryControls({
       onRoomChange(nextRoom);
     }
 
-    if (!active || document.pointerLockElement !== gl.domElement) return;
+    if (!active || (!isMobile && document.pointerLockElement !== gl.domElement)) return;
 
     const forward = new THREE.Vector2(-Math.sin(yaw.current), -Math.cos(yaw.current));
     const strafe = new THREE.Vector2(Math.cos(yaw.current), -Math.sin(yaw.current));
@@ -355,6 +400,10 @@ function GalleryControls({
     if (keys.current.has("KeyS") || keys.current.has("ArrowDown")) direction.sub(forward);
     if (keys.current.has("KeyD") || keys.current.has("ArrowRight")) direction.add(strafe);
     if (keys.current.has("KeyA") || keys.current.has("ArrowLeft")) direction.sub(strafe);
+    if (isMobile) {
+      direction.addScaledVector(forward, mobileInput.current.forward);
+      direction.addScaledVector(strafe, mobileInput.current.strafe);
+    }
     if (direction.lengthSq() === 0) return;
     direction.normalize().multiplyScalar(delta * 4.2);
 
@@ -1001,6 +1050,9 @@ function LoadedArtwork({
 
 export function MuseumScene({
   active,
+  isMobile,
+  mobileInput,
+  interactionToken,
   onArtworkSelect,
   onPointerLockChange,
   onRoomChange,
@@ -1028,6 +1080,9 @@ export function MuseumScene({
     />
     <GalleryControls
       active={active}
+      isMobile={isMobile}
+      mobileInput={mobileInput}
+      interactionToken={interactionToken}
       entranceOpen={entranceOpen}
       internalDoorsOpen={stableInternalDoors}
       doorRegistry={doorRegistry}
