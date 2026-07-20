@@ -1,4 +1,4 @@
-const CACHE_NAME = "museu-van-gogh-v1";
+const CACHE_NAME = "museu-van-gogh-v2";
 const APP_SHELL = ["/", "/museu", "/biografia", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -33,7 +33,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/artworks/") || url.pathname.startsWith("/_next/")) {
+  // Chunks do Next devem ser sempre buscados da rede primeiro. Isso evita que
+  // uma versão antiga da cena 3D sobreviva após uma atualização do app.
+  if (url.pathname.startsWith("/_next/")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith("/artworks/")) {
     event.respondWith(
       caches.match(event.request).then((cached) =>
         cached || fetch(event.request).then((response) => {

@@ -523,7 +523,10 @@ function WaveGlassRoof() {
 }
 
 function GlassPavilion() {
-  const frontPanels = Array.from({ length: 10 }, (_, index) => -5.4 + index * 1.2);
+  // O vão central precisa ficar livre: as portas deslizantes ocupam este espaço.
+  // Deixa 7,2m de vão sem montantes: nenhum vidro fixo fica na frente da porta.
+  const frontPanels = [-5.4, -4.2, 4.2, 5.4];
+  const doorOpeningHalfWidth = 3.6;
   return <group>
     {/* Grande fachada de vidro central, como na referência enviada */}
     {frontPanels.map((x) => {
@@ -533,10 +536,16 @@ function GlassPavilion() {
         <mesh position={[-0.58, 0, 0.06]}><boxGeometry args={[0.07, height + 0.05, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.82} roughness={0.2} /></mesh>
       </group>;
     })}
-    {[1.55, 3.1, 4.65, 6.2].map((y) => <mesh key={y} position={[0, y, 14.24]}>
-      <boxGeometry args={[12.1, 0.07, 0.08]} />
-      <meshStandardMaterial color="#174c68" metalness={0.8} roughness={0.18} />
-    </mesh>)}
+    {[1.55, 3.1, 4.65, 6.2].map((y) => <group key={y}>
+      <mesh position={[-(6 - doorOpeningHalfWidth) / 2 - doorOpeningHalfWidth, y, 14.24]}>
+        <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
+        <meshStandardMaterial color="#174c68" metalness={0.8} roughness={0.18} />
+      </mesh>
+      <mesh position={[(6 - doorOpeningHalfWidth) / 2 + doorOpeningHalfWidth, y, 14.24]}>
+        <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
+        <meshStandardMaterial color="#174c68" metalness={0.8} roughness={0.18} />
+      </mesh>
+    </group>)}
 
     {/* Laterais curvas do átrio */}
     {[-1.35, -1.08, -0.82, 0.82, 1.08, 1.35].map((angle) => {
@@ -967,9 +976,9 @@ function LoadedArtwork({
   slot: ArtworkSlot;
   registry: MutableRefObject<Map<THREE.Object3D, Artwork>>;
 }) {
-  const texture = useTexture(
-    `/_next/image?url=${encodeURIComponent(slot.artwork.imagem)}&w=640&q=70`,
-  );
+  // TextureLoader usa o arquivo estático diretamente. Montar /_next/image
+  // manualmente funciona localmente, mas a Vercel rejeita a URL com 400.
+  const texture = useTexture(slot.artwork.imagem);
   const image = useRef<THREE.Mesh>(null);
 
   useEffect(() => {
