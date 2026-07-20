@@ -20,9 +20,13 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://vangogh.vercel.app"),
+  ),
   title: "Museu Van Gogh — Experiência Imersiva",
   description:
-    "Museu virtual imersivo dedicado a Vincent van Gogh: entrada inspirada no museu de Amsterdã e linha do tempo interativa com 37 obras e explicações.",
+    "Museu virtual imersivo dedicado a Vincent van Gogh: explore 50 obras, uma linha do tempo e o museu 3D inspirado em Amsterdã.",
   manifest: "/manifest.webmanifest",
   applicationName: "Museu Van Gogh",
   appleWebApp: {
@@ -36,6 +40,27 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icon",
     apple: "/apple-icon",
+  },
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "Museu Van Gogh",
+    title: "Museu Van Gogh — Experiência Imersiva",
+    description:
+      "Entre no museu virtual de Van Gogh, caminhe pelas salas cronológicas e descubra 50 obras marcantes.",
+    images: [
+      {
+        url: "/artworks/a-noite-estrelada.jpg",
+        alt: "A Noite Estrelada, de Vincent van Gogh, 1889",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Museu Van Gogh — Experiência Imersiva",
+    description:
+      "Explore 50 obras de Van Gogh em uma experiência virtual imersiva.",
+    images: ["/artworks/a-noite-estrelada.jpg"],
   },
 };
 
