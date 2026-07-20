@@ -22,7 +22,9 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ??
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://vangogh.vercel.app"),
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "https://vangogh-git-main-naturativacell.vercel.app"),
   ),
   title: "Museu Van Gogh — Experiência Imersiva",
   description:
