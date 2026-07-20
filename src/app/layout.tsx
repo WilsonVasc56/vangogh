@@ -50,8 +50,10 @@ export const metadata: Metadata = {
       "Entre no museu virtual de Van Gogh, caminhe pelas salas cronológicas e descubra 50 obras marcantes.",
     images: [
       {
-        url: "/artworks/a-noite-estrelada.jpg",
-        alt: "A Noite Estrelada, de Vincent van Gogh, 1889",
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Museu Van Gogh: experiência imersiva com 50 obras",
       },
     ],
   },
@@ -60,7 +62,7 @@ export const metadata: Metadata = {
     title: "Museu Van Gogh — Experiência Imersiva",
     description:
       "Explore 50 obras de Van Gogh em uma experiência virtual imersiva.",
-    images: ["/artworks/a-noite-estrelada.jpg"],
+    images: ["/opengraph-image"],
   },
 };
 
