@@ -658,6 +658,8 @@ function MuseumBench({
 }
 
 const VISITOR_MODEL = "/models/visitor.glb";
+// O rig do modelo olha para -Z; compensa 180° para alinhar frente/movimento.
+const VISITOR_FORWARD_OFFSET = Math.PI;
 
 // Humanos 3D com esqueleto animado (caminhar/parado). Cada visitante carrega a
 // própria instância do GLB: clonar SkinnedMesh quebra o rig e torna o modelo
@@ -726,10 +728,11 @@ function Visitor({
     const wave = Math.sin(elapsed.current);
     person.current.position.z = position[2] + wave * walkingRange;
     person.current.rotation.y =
-      Math.cos(elapsed.current) >= 0 ? rotationY : rotationY + Math.PI;
+      (Math.cos(elapsed.current) >= 0 ? rotationY : rotationY + Math.PI) +
+      VISITOR_FORWARD_OFFSET;
   });
 
-  return <group ref={person} position={position} rotation={[0, rotationY, 0]} scale={scale}>
+  return <group ref={person} position={position} rotation={[0, rotationY + VISITOR_FORWARD_OFFSET, 0]} scale={scale}>
     {gltf && <primitive object={gltf.scene} />}
   </group>;
 }
