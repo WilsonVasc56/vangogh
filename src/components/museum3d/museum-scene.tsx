@@ -1,6 +1,6 @@
 "use client";
 
-import { Html, useAnimations, useTexture } from "@react-three/drei";
+import { Environment, Html, Lightformer, Sky, useAnimations, useTexture } from "@react-three/drei";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -560,7 +560,7 @@ function WaveGlassRoof() {
 
   return <group>
     <mesh geometry={geometry}>
-      <meshStandardMaterial color="#74c8ee" transparent opacity={0.38} metalness={0.42} roughness={0.08} side={THREE.DoubleSide} />
+      <meshPhysicalMaterial color="#a8d8ee" transparent opacity={0.3} roughness={0.05} metalness={0.05} clearcoat={1} clearcoatRoughness={0.1} envMapIntensity={1.6} side={THREE.DoubleSide} />
     </mesh>
     {Array.from({ length: 13 }, (_, index) => {
       const x = -6 + index;
@@ -582,18 +582,18 @@ function GlassPavilion() {
     {frontPanels.map((x) => {
       const height = glassRoofHeight(x) - 0.25;
       return <group key={x} position={[x, height / 2, 14.18]}>
-        <mesh><boxGeometry args={[1.16, height, 0.075]} /><meshStandardMaterial color="#46b8e7" transparent opacity={0.31} metalness={0.55} roughness={0.06} /></mesh>
-        <mesh position={[-0.58, 0, 0.06]}><boxGeometry args={[0.07, height + 0.05, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.82} roughness={0.2} /></mesh>
+        <mesh><boxGeometry args={[1.16, height, 0.075]} /><meshPhysicalMaterial color="#9fd4ec" transparent opacity={0.32} roughness={0.06} metalness={0.05} clearcoat={1} clearcoatRoughness={0.08} envMapIntensity={1.7} /></mesh>
+        <mesh position={[-0.58, 0, 0.06]}><boxGeometry args={[0.07, height + 0.05, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.85} roughness={0.3} envMapIntensity={1.2} /></mesh>
       </group>;
     })}
     {[1.55, 3.1, 4.65, 6.2].map((y) => <group key={y}>
       <mesh position={[-(6 - doorOpeningHalfWidth) / 2 - doorOpeningHalfWidth, y, 14.24]}>
         <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
-        <meshStandardMaterial color="#174c68" metalness={0.8} roughness={0.18} />
+        <meshStandardMaterial color="#174c68" metalness={0.85} roughness={0.3} envMapIntensity={1.2} />
       </mesh>
       <mesh position={[(6 - doorOpeningHalfWidth) / 2 + doorOpeningHalfWidth, y, 14.24]}>
         <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
-        <meshStandardMaterial color="#174c68" metalness={0.8} roughness={0.18} />
+        <meshStandardMaterial color="#174c68" metalness={0.85} roughness={0.3} envMapIntensity={1.2} />
       </mesh>
     </group>)}
 
@@ -602,8 +602,8 @@ function GlassPavilion() {
       const x = Math.sin(angle) * 6.3;
       const z = 11 + Math.cos(angle) * 3.7;
       return <group key={angle} position={[x, 3.15, z]} rotation={[0, angle, 0]}>
-        <mesh><boxGeometry args={[1.7, 6.3, 0.075]} /><meshStandardMaterial color="#55bce4" transparent opacity={0.28} metalness={0.58} roughness={0.06} /></mesh>
-        <mesh position={[-0.82, 0, 0.06]}><boxGeometry args={[0.07, 6.4, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.82} roughness={0.2} /></mesh>
+        <mesh><boxGeometry args={[1.7, 6.3, 0.075]} /><meshPhysicalMaterial color="#9fd4ec" transparent opacity={0.28} roughness={0.06} metalness={0.05} clearcoat={1} clearcoatRoughness={0.08} envMapIntensity={1.7} /></mesh>
+        <mesh position={[-0.82, 0, 0.06]}><boxGeometry args={[0.07, 6.4, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.85} roughness={0.3} envMapIntensity={1.2} /></mesh>
       </group>;
     })}
     <WaveGlassRoof />
@@ -1009,15 +1009,100 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
   </group>;
 }
 
+/* ---------------------------------------------------------------------- */
+/* Texturas procedurais geradas no cliente (sem dependência de rede)       */
+/* ---------------------------------------------------------------------- */
+
+function makeCanvasTexture(
+  draw: (ctx: CanvasRenderingContext2D, size: number) => void,
+  repeatX: number,
+  repeatY: number,
+) {
+  if (typeof document === "undefined") return null;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  draw(ctx, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(repeatX, repeatY);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function shade(hex: string, factor: number) {
+  const value = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, ((value >> 16) & 255) * factor) | 0;
+  const g = Math.min(255, ((value >> 8) & 255) * factor) | 0;
+  const b = Math.min(255, (value & 255) * factor) | 0;
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawPavers(ctx: CanvasRenderingContext2D, size: number) {
+  ctx.fillStyle = "#8d5a41";
+  ctx.fillRect(0, 0, size, size);
+  const bw = size / 8;
+  const bh = size / 16;
+  for (let row = 0; row < 16; row++) {
+    const offset = row % 2 ? bw / 2 : 0;
+    for (let col = -1; col < 9; col++) {
+      const factor = 0.86 + ((row * 37 + col * 13) % 9) / 45;
+      ctx.fillStyle = shade("#c07a54", factor);
+      ctx.fillRect(col * bw + offset + 1, row * bh + 1, bw - 2, bh - 2);
+    }
+  }
+}
+
+function drawYellowBricks(ctx: CanvasRenderingContext2D, size: number) {
+  ctx.fillStyle = "#b9a583";
+  ctx.fillRect(0, 0, size, size);
+  const bw = size / 6;
+  const bh = size / 18;
+  for (let row = 0; row < 18; row++) {
+    const offset = row % 2 ? bw / 2 : 0;
+    for (let col = -1; col < 7; col++) {
+      const factor = 0.9 + ((row * 29 + col * 17) % 8) / 40;
+      ctx.fillStyle = shade("#cf9552", factor);
+      ctx.fillRect(col * bw + offset + 1, row * bh + 1, bw - 2, bh - 2);
+    }
+  }
+}
+
+function drawConcrete(ctx: CanvasRenderingContext2D, size: number) {
+  ctx.fillStyle = "#d9d6cf";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 900; i++) {
+    const x = (i * 73) % size;
+    const y = (i * 149) % size;
+    ctx.fillStyle = i % 2 ? "rgba(120,118,110,0.08)" : "rgba(255,255,255,0.07)";
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.strokeStyle = "rgba(110,108,100,0.25)";
+  ctx.lineWidth = 2;
+  for (let x = 0; x <= size; x += size / 4) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, size);
+    ctx.stroke();
+  }
+}
+
+const plazaTexture = makeCanvasTexture(drawPavers, 16, 10);
+const yellowBrickTexture = makeCanvasTexture(drawYellowBricks, 3, 3);
+const concreteTexture = makeCanvasTexture(drawConcrete, 5, 2);
+
 function RietveldExterior() {
   return <group position={[-7.2, 0, 6.8]}>
     {/* Grande volume branco curvo à esquerda da referência */}
-    <mesh position={[0, 6, 0]} scale={[7.25, 1, 4.75]}>
+    <mesh position={[0, 6, 0]} scale={[7.25, 1, 4.75]} castShadow>
       <cylinderGeometry args={[1, 1, 12, 56]} />
-      <meshStandardMaterial color="#dedbd4" roughness={0.82} />
+      <meshStandardMaterial color={concreteTexture ? "#ffffff" : "#dedbd4"} map={concreteTexture ?? undefined} roughness={0.82} />
     </mesh>
     {/* Lajes salientes superior e inferior */}
-    <mesh position={[0, 12.1, 0]} scale={[7.7, 1, 5.08]}>
+    <mesh position={[0, 12.1, 0]} scale={[7.7, 1, 5.08]} castShadow>
       <cylinderGeometry args={[1, 1, 0.38, 56]} />
       <meshStandardMaterial color="#f1eee7" roughness={0.68} />
     </mesh>
@@ -1043,9 +1128,9 @@ function RietveldExterior() {
 function BrickWing() {
   return <group position={[9.2, 0, 6]}>
     {/* Edifício de tijolos à direita */}
-    <mesh position={[0, 5.5, 0]}>
+    <mesh position={[0, 5.5, 0]} castShadow>
       <boxGeometry args={[10.6, 11, 11]} />
-      <meshStandardMaterial color="#cf9552" roughness={0.9} />
+      <meshStandardMaterial color={yellowBrickTexture ? "#ffffff" : "#cf9552"} map={yellowBrickTexture ?? undefined} roughness={0.9} />
     </mesh>
     {/* Faixas claras entre os pavimentos */}
     {[2.2, 5.25].map((y) => <mesh key={y} position={[0, y, 5.56]}>
@@ -1068,7 +1153,7 @@ function BrickWing() {
 
 function SunflowerPlanter({ x }: { x: number }) {
   return <group position={[x, 0, 16.5]}>
-    <mesh position={[0, 0.34, 0]}><boxGeometry args={[2.2, 0.68, 0.72]} /><meshStandardMaterial color="#6f706a" roughness={0.9} /></mesh>
+    <mesh position={[0, 0.34, 0]} castShadow><boxGeometry args={[2.2, 0.68, 0.72]} /><meshStandardMaterial color="#6f706a" roughness={0.9} /></mesh>
     {[-0.72, -0.24, 0.24, 0.72].map((offset, index) => <group key={offset} position={[offset, 0.68, 0]}>
       <mesh position={[0, 0.7 + (index % 2) * 0.18, 0]}><cylinderGeometry args={[0.018, 0.028, 1.4, 7]} /><meshStandardMaterial color="#3f6a42" /></mesh>
       <mesh position={[0, 1.42 + (index % 2) * 0.18, 0]}><sphereGeometry args={[0.2, 12, 8]} /><meshStandardMaterial color="#e1ad24" roughness={0.85} /></mesh>
@@ -1110,7 +1195,7 @@ function TulipBed() {
 
 function StreetLamp() {
   return <group position={[6.8, 0, 20.5]}>
-    <mesh position={[0, 2.5, 0]}><cylinderGeometry args={[0.09, 0.16, 5, 10]} /><meshStandardMaterial color="#182128" metalness={0.72} roughness={0.28} /></mesh>
+    <mesh position={[0, 2.5, 0]} castShadow><cylinderGeometry args={[0.09, 0.16, 5, 10]} /><meshStandardMaterial color="#182128" metalness={0.72} roughness={0.28} /></mesh>
     <mesh position={[0, 5.05, 0]}><boxGeometry args={[0.7, 0.95, 0.7]} /><meshStandardMaterial color="#182128" metalness={0.72} roughness={0.25} wireframe /></mesh>
     <pointLight position={[0, 5.05, 0]} intensity={3.5} distance={8} color="#ffd680" />
     <mesh position={[0, 5.65, 0]}><coneGeometry args={[0.55, 0.3, 4]} /><meshStandardMaterial color="#182128" metalness={0.72} /></mesh>
@@ -1128,16 +1213,38 @@ function CanalAndBikes() {
 
 function LargeTree() {
   return <group position={[18, 0, 17]}>
-    <mesh position={[0, 4.5, 0]}><cylinderGeometry args={[0.48, 0.85, 9, 12]} /><meshStandardMaterial color="#654326" roughness={0.96} /></mesh>
-    {[[-2.2, 8.4, 0], [1.6, 9, 0.2], [-0.3, 10.2, -0.2], [3.2, 8.2, 0]].map((position, index) => <mesh key={index} position={position as [number, number, number]} scale={[1.8, 1.15, 1.5]}><sphereGeometry args={[2.2, 14, 10]} /><meshStandardMaterial color={index % 2 ? "#6f9d35" : "#83b43e"} roughness={1} /></mesh>)}
+    <mesh position={[0, 4.5, 0]} castShadow><cylinderGeometry args={[0.48, 0.85, 9, 12]} /><meshStandardMaterial color="#654326" roughness={0.96} /></mesh>
+    {[[-2.2, 8.4, 0], [1.6, 9, 0.2], [-0.3, 10.2, -0.2], [3.2, 8.2, 0]].map((position, index) => <mesh key={index} position={position as [number, number, number]} scale={[1.8, 1.15, 1.5]} castShadow><sphereGeometry args={[2.2, 14, 10]} /><meshStandardMaterial color={index % 2 ? "#6f9d35" : "#83b43e"} roughness={1} /></mesh>)}
   </group>;
 }
 
-function IllustratedClouds() {
+function PlazaDetails() {
   return <group>
-    {[[-14, 18, 1], [15, 19, 0]].map((position, cluster) => <group key={cluster} position={position as [number, number, number]}>
-      {[-2, -0.7, 0.7, 2].map((x, index) => <mesh key={x} position={[x, index % 2 ? 0.55 : 0, 0]} scale={[1.6, 1, 0.8]}><sphereGeometry args={[1.25, 12, 8]} /><meshBasicMaterial color="#ffffff" /></mesh>)}
-    </group>)}
+    {/* Escadaria de acesso à entrada */}
+    <mesh position={[0, 0.09, 15.35]} castShadow receiveShadow><boxGeometry args={[8.4, 0.18, 1.1]} /><meshStandardMaterial color="#c9c2b6" roughness={0.9} /></mesh>
+    <mesh position={[0, 0.045, 15.95]} castShadow receiveShadow><boxGeometry args={[9.2, 0.09, 1.2]} /><meshStandardMaterial color="#bdb5a8" roughness={0.9} /></mesh>
+
+    {/* Guarda-corpo do canal */}
+    {Array.from({ length: 14 }, (_, index) => (
+      <mesh key={index} position={[-13.05, 0.5, 9.5 + index * 2]} castShadow>
+        <cylinderGeometry args={[0.035, 0.035, 1.05, 8]} />
+        <meshStandardMaterial color="#24443c" metalness={0.6} roughness={0.4} />
+      </mesh>
+    ))}
+    <mesh position={[-13.05, 0.98, 22]}><boxGeometry args={[0.07, 0.07, 26]} /><meshStandardMaterial color="#24443c" metalness={0.6} roughness={0.4} /></mesh>
+    <mesh position={[-13.05, 0.62, 22]}><boxGeometry args={[0.05, 0.05, 26]} /><meshStandardMaterial color="#2c5248" metalness={0.6} roughness={0.4} /></mesh>
+
+    {/* Totem de sinalização */}
+    <group position={[5.6, 0, 18.2]} rotation={[0, -0.5, 0]}>
+      <mesh position={[0, 0.8, 0]} castShadow><boxGeometry args={[1.5, 1.6, 0.14]} /><meshStandardMaterial color="#101418" roughness={0.5} /></mesh>
+      <mesh position={[0, 1.15, 0.08]}><planeGeometry args={[1.2, 0.16]} /><meshStandardMaterial color="#f2efe6" /></mesh>
+      <mesh position={[0, 0.85, 0.08]}><planeGeometry args={[1.2, 0.1]} /><meshStandardMaterial color="#f2b827" /></mesh>
+    </group>
+
+    {/* Mobiliário e pessoas na praça */}
+    <MuseumBench position={[14.5, 0, 20.5]} rotationY={Math.PI / 2} />
+    <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} tint="#315a69" scale={1.02} />
+    <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} tint="#7d3941" scale={0.97} />
   </group>;
 }
 
@@ -1179,23 +1286,40 @@ function MuseumArchitecture({
   doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
 }) {
   return <group>
-    <color attach="background" args={["#159dea"]} />
-    <fog attach="fog" args={["#8ed5f5", 125, 220]} />
-    <ambientLight intensity={0.8} color="#e5f3ff" />
-    <hemisphereLight intensity={0.92} color="#dff2ff" groundColor="#6d755a" />
-    <directionalLight position={[-18, 28, 30]} intensity={2.5} color="#fff4d5" castShadow />
+    <Sky distance={4000} sunPosition={[-35, 42, 25]} turbidity={5} rayleigh={0.35} mieCoefficient={0.005} mieDirectionalG={0.8} />
+    <fog attach="fog" args={["#cfe4f4", 130, 230]} />
+    <Environment resolution={64} frames={1}>
+      <Lightformer intensity={1.4} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[12, 12, 1]} color="#eaf4ff" />
+      <Lightformer intensity={0.9} rotation-y={Math.PI / 2} position={[-8, 2, 0]} scale={[8, 3, 1]} color="#fff2da" />
+      <Lightformer intensity={0.7} rotation-y={-Math.PI / 2} position={[8, 2, 0]} scale={[8, 3, 1]} color="#dfeaff" />
+      <Lightformer intensity={0.5} position={[0, 2, -9]} scale={[10, 3, 1]} color="#cfd8e2" />
+    </Environment>
+    <ambientLight intensity={0.55} color="#e5f3ff" />
+    <hemisphereLight intensity={0.75} color="#dff2ff" groundColor="#6d755a" />
+    <directionalLight
+      position={[-35, 42, 25]}
+      intensity={2.8}
+      color="#fff2d0"
+      castShadow
+      shadow-mapSize-width={2048}
+      shadow-mapSize-height={2048}
+      shadow-camera-left={-50}
+      shadow-camera-right={50}
+      shadow-camera-top={50}
+      shadow-camera-bottom={-50}
+      shadow-camera-far={140}
+      shadow-bias={-0.0004}
+    />
     <pointLight position={[0, 5, 15]} intensity={11} distance={22} color="#fff0ce" />
 
-    {/* Praça externa */}
+    {/* Praça externa com pavimento de tijolos */}
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.025, 22]} receiveShadow>
       <planeGeometry args={[48, 30]} />
-      <meshStandardMaterial color="#bd7956" roughness={0.96} />
+      <meshStandardMaterial color={plazaTexture ? "#ffffff" : "#bd7956"} map={plazaTexture ?? undefined} roughness={0.96} />
     </mesh>
-    {Array.from({ length: 25 }, (_, index) => <mesh key={`x-${index}`} rotation={[-Math.PI / 2, 0, 0]} position={[-24 + index * 2, -0.015, 22]}><planeGeometry args={[0.025, 30]} /><meshBasicMaterial color="#e4a17d" /></mesh>)}
-    {Array.from({ length: 16 }, (_, index) => <mesh key={`z-${index}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.014, 7 + index * 2]}><planeGeometry args={[48, 0.025]} /><meshBasicMaterial color="#e4a17d" /></mesh>)}
 
     {/* Gramado do Museumplein nas laterais do eixo de entrada */}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-20.5, -0.012, 25]}><planeGeometry args={[7, 26]} /><meshStandardMaterial color="#70a34d" roughness={1} /></mesh>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-20.5, -0.012, 25]} receiveShadow><planeGeometry args={[7, 26]} /><meshStandardMaterial color="#70a34d" roughness={1} /></mesh>
 
     <RietveldExterior />
     <BrickWing />
@@ -1219,7 +1343,7 @@ function MuseumArchitecture({
     <TulipBed />
     <StreetLamp />
     <LargeTree />
-    <IllustratedClouds />
+    <PlazaDetails />
   </group>;
 }
 

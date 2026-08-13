@@ -59,6 +59,7 @@ export function MuseumExperience() {
         camera={{ fov: 62, near: 0.1, far: 220, position: [0, 1.7, 28] }}
         dpr={[1, 1.75]}
         gl={{ antialias: true }}
+        shadows
       >
         <MuseumScene
           active={isMobile || locked}
