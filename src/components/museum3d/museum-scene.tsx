@@ -1,6 +1,7 @@
 "use client";
 
-import { Html, useAnimations, useGLTF, useTexture } from "@react-three/drei";
+import { Html, useAnimations, useTexture } from "@react-three/drei";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Suspense,
@@ -658,8 +659,9 @@ function MuseumBench({
 
 const VISITOR_MODEL = "/models/visitor.glb";
 
-// Humanos 3D com esqueleto animado (caminhar/parado). Cada instância clona o
-// modelo e os materiais para variar a cor da roupa sem vazar entre visitantes.
+// Humanos 3D com esqueleto animado (caminhar/parado). Cada visitante carrega a
+// própria instância do GLB: clonar SkinnedMesh quebra o rig e torna o modelo
+// invisível, então o arquivo (em cache HTTP) é parseado por instância.
 function Visitor({
   position,
   rotationY = 0,
@@ -675,26 +677,38 @@ function Visitor({
   phase?: number;
   scale?: number;
 }) {
-  const { scene, animations } = useGLTF(VISITOR_MODEL);
-  const model = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.material = (
-        Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-      ).map((material) => {
-        const copy = material.clone() as THREE.MeshStandardMaterial;
-        if (/body/i.test(copy.name)) copy.color = new THREE.Color(tint);
-        return copy;
-      }) as THREE.Material | THREE.Material[];
-    });
-    return clone;
-  }, [scene, tint]);
+  const [gltf, setGltf] = useState<GLTF | null>(null);
   const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(animations, person);
+  const { actions } = useAnimations(gltf?.animations ?? [], person);
   const elapsed = useRef(phase);
+
+  useEffect(() => {
+    let alive = true;
+    new GLTFLoader().load(
+      VISITOR_MODEL,
+      (loaded) => {
+        if (!alive) return;
+        loaded.scene.traverse((object) => {
+          const mesh = object as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.castShadow = true;
+          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
+            (material) => {
+              if (/body/i.test(material.name)) {
+                (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
+              }
+            },
+          );
+        });
+        setGltf(loaded);
+      },
+      undefined,
+      () => setGltf(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [tint]);
 
   useEffect(() => {
     const action = walkingRange ? actions.Walk : actions.Idle;
@@ -716,10 +730,9 @@ function Visitor({
   });
 
   return <group ref={person} position={position} rotation={[0, rotationY, 0]} scale={scale}>
-    <primitive object={model} />
+    {gltf && <primitive object={gltf.scene} />}
   </group>;
 }
-useGLTF.preload(VISITOR_MODEL);
 
 const visitorTints = ["#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f"];
 
