@@ -1,6 +1,6 @@
 "use client";
 
-import { Environment, Html, Lightformer, Sky, useAnimations, useTexture } from "@react-three/drei";
+import { Environment, Html, Lightformer, Sky, useAnimations } from "@react-three/drei";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -14,6 +14,7 @@ import {
 import * as THREE from "three";
 import { artworks, type Artwork } from "@/data/artworks";
 import { periods, type PeriodId } from "@/data/periods";
+import { GalleryArtwork, type ArtworkSlot } from "./gallery-artwork";
 
 interface MuseumSceneProps {
   active: boolean;
@@ -44,12 +45,6 @@ interface RoomConfig {
   floorColor: string;
   accent: string;
   items: Artwork[];
-}
-
-interface ArtworkSlot {
-  artwork: Artwork;
-  position: [number, number, number];
-  rotation: [number, number, number];
 }
 
 const ENTRANCE_DOOR_Z = 14.8;
@@ -105,9 +100,10 @@ function createArtworkSlots(): ArtworkSlot[] {
       const row = Math.floor(index / 2);
       return {
         artwork,
+        // Origem no piso; o componente pendura a tela na linha de olhar (1,55 m).
         position: [
           leftWall ? -ROOM_HALF_WIDTH + 0.28 : ROOM_HALF_WIDTH - 0.28,
-          1.23,
+          0,
           room.startZ - 2.7 - row * 2.25,
         ],
         rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
@@ -952,24 +948,63 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
   </group>;
 }
 
-function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: number }) {
+function Room({
+  room,
+  last,
+  index,
+  isMobile,
+}: {
+  room: RoomConfig;
+  last: boolean;
+  index: number;
+  isMobile: boolean;
+}) {
+  const floorTexture = roomFloorTextures[index];
+  const wallTexture = roomWallTextures[index];
+  const endWallTexture = roomEndWallTextures[index];
+  const wallMaterial = (texture: THREE.Texture | null) => (
+    <meshStandardMaterial
+      color={texture ? "#ffffff" : room.wallColor}
+      map={texture ?? undefined}
+      roughness={0.92}
+    />
+  );
+
   return <group>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, room.centerZ]} receiveShadow>
       <planeGeometry args={[ROOM_HALF_WIDTH * 2, room.length]} />
-      <meshStandardMaterial color={room.floorColor} roughness={0.78} />
+      <meshStandardMaterial
+        color={floorTexture ? "#ffffff" : room.floorColor}
+        map={floorTexture ?? undefined}
+        roughness={0.66}
+      />
     </mesh>
     <mesh position={[-ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+      {wallMaterial(wallTexture)}
     </mesh>
     <mesh position={[ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+      {wallMaterial(wallTexture)}
     </mesh>
     <mesh position={[0, ROOM_HEIGHT, room.centerZ]}>
       <boxGeometry args={[ROOM_HALF_WIDTH * 2, 0.22, room.length]} />
       <meshStandardMaterial color="#313b49" roughness={0.72} />
     </mesh>
+
+    {/* Rodapé e friso de pendurar quadros, como em galerias reais */}
+    {[-1, 1].map((side) => (
+      <group key={side}>
+        <mesh position={[side * (ROOM_HALF_WIDTH - 0.16), 0.06, room.centerZ]}>
+          <boxGeometry args={[0.04, 0.12, room.length]} />
+          <meshStandardMaterial color={shade(room.wallColor, 0.55)} roughness={0.6} />
+        </mesh>
+        <mesh position={[side * (ROOM_HALF_WIDTH - 0.165), 3.12, room.centerZ]}>
+          <boxGeometry args={[0.03, 0.07, room.length]} />
+          <meshStandardMaterial color={shade(room.wallColor, 1.18)} roughness={0.7} />
+        </mesh>
+      </group>
+    ))}
 
     {/* Faixa de identificação visual do período */}
     <mesh position={[-ROOM_HALF_WIDTH + 0.19, 4.9, room.startZ - 1.7]} rotation={[0, Math.PI / 2, 0]}>
@@ -981,26 +1016,33 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
     {last ? (
       <mesh position={[0, ROOM_HEIGHT / 2, room.endZ]}>
         <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, 0.28]} />
-        <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+        {wallMaterial(endWallTexture)}
       </mesh>
     ) : (
       <>
         <mesh position={[-(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
         <mesh position={[(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
         <mesh position={[0, 5.25, room.endZ]}>
           <boxGeometry args={[DOOR_HALF_WIDTH * 2, ROOM_HEIGHT - 4, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
       </>
     )}
 
-    <pointLight position={[0, 5.6, room.centerZ]} intensity={46} distance={room.length * 0.8} color="#ffe8bd" />
+    <pointLight position={[0, 5.6, room.centerZ]} intensity={34} distance={room.length * 0.8} color="#ffe8bd" />
+    {/* Luzes quentes rasando as paredes das obras; fora do mobile para poupar fill-rate */}
+    {!isMobile && (
+      <>
+        <pointLight position={[-6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
+        <pointLight position={[6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
+      </>
+    )}
     <mesh position={[0, ROOM_HEIGHT - 0.14, room.centerZ]}>
       <boxGeometry args={[3.2, 0.08, Math.max(4, room.length - 3)]} />
       <meshStandardMaterial color="#fff1ca" emissive="#ffe8b0" emissiveIntensity={1.1} toneMapped={false} />
@@ -1090,9 +1132,72 @@ function drawConcrete(ctx: CanvasRenderingContext2D, size: number) {
   }
 }
 
+// Piso de madeira em tábuas corridas, tingido pela paleta da sala.
+function drawParquet(ctx: CanvasRenderingContext2D, size: number, base: string) {
+  ctx.fillStyle = shade(base, 0.9);
+  ctx.fillRect(0, 0, size, size);
+  const plankLength = size / 3;
+  const plankWidth = size / 16;
+  for (let row = 0; row < 16; row++) {
+    const offset = row % 2 ? plankLength / 2 : 0;
+    for (let col = -1; col < 4; col++) {
+      const factor = 0.92 + ((row * 43 + col * 23) % 12) / 30;
+      ctx.fillStyle = shade(base, factor);
+      ctx.fillRect(col * plankLength + offset + 1, row * plankWidth + 1, plankLength - 2, plankWidth - 2);
+      // Veio discreto ao longo da tábua
+      ctx.fillStyle = shade(base, factor * 0.9);
+      const grainY = row * plankWidth + 3 + ((col * 29 + row * 11) % Math.max(1, plankWidth - 6));
+      ctx.fillRect(col * plankLength + offset + 6, grainY, plankLength - 12, 1.4);
+    }
+  }
+}
+
+// Reboco de parede: ruído fino + manchas amplas de variação de valor.
+function drawPlaster(ctx: CanvasRenderingContext2D, size: number, base: string) {
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 700; i++) {
+    const x = (i * 97) % size;
+    const y = (i * 57) % size;
+    ctx.fillStyle = i % 2 ? "rgba(0,0,0,0.045)" : "rgba(255,255,255,0.05)";
+    ctx.fillRect(x, y, 2, 2);
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = (i * 71) % size;
+    const y = (i * 131) % size;
+    const radius = 18 + ((i * 13) % 26);
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, i % 2 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.045)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 const plazaTexture = makeCanvasTexture(drawPavers, 16, 10);
 const yellowBrickTexture = makeCanvasTexture(drawYellowBricks, 3, 3);
 const concreteTexture = makeCanvasTexture(drawConcrete, 5, 2);
+
+// Uma textura de piso e parede por sala (tile de ~1,8 m no piso, ~3 m na parede).
+const roomFloorTextures = rooms.map((room) =>
+  makeCanvasTexture(
+    (ctx, size) => drawParquet(ctx, size, room.floorColor),
+    9.5,
+    Math.max(6, room.length / 1.8),
+  ),
+);
+const roomWallTextures = rooms.map((room) =>
+  makeCanvasTexture(
+    (ctx, size) => drawPlaster(ctx, size, room.wallColor),
+    Math.max(4, room.length / 3),
+    2,
+  ),
+);
+const roomEndWallTextures = rooms.map((room) =>
+  makeCanvasTexture((ctx, size) => drawPlaster(ctx, size, room.wallColor), 6, 2),
+);
 
 function RietveldExterior() {
   return <group position={[-7.2, 0, 6.8]}>
@@ -1280,10 +1385,12 @@ function MuseumArchitecture({
   entranceOpen,
   internalDoorsOpen,
   doorRegistry,
+  isMobile,
 }: {
   entranceOpen: boolean;
   internalDoorsOpen: boolean[];
   doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
+  isMobile: boolean;
 }) {
   return <group>
     <Sky distance={4000} sunPosition={[-35, 42, 25]} turbidity={5} rayleigh={0.35} mieCoefficient={0.005} mieDirectionalG={0.8} />
@@ -1334,7 +1441,9 @@ function MuseumArchitecture({
       </div>
     </Html>
 
-    {rooms.map((room, index) => <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} />)}
+    {rooms.map((room, index) => (
+      <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} isMobile={isMobile} />
+    ))}
     {internalDoorBoundaries.map((z, index) => (
       <SlidingDoors key={z} z={z} open={internalDoorsOpen[index]} />
     ))}
@@ -1344,36 +1453,6 @@ function MuseumArchitecture({
     <StreetLamp />
     <LargeTree />
     <PlazaDetails />
-  </group>;
-}
-
-function LoadedArtwork({
-  slot,
-  registry,
-}: {
-  slot: ArtworkSlot;
-  registry: MutableRefObject<Map<THREE.Object3D, Artwork>>;
-}) {
-  // TextureLoader usa o arquivo estático diretamente. Montar /_next/image
-  // manualmente funciona localmente, mas a Vercel rejeita a URL com 400.
-  const texture = useTexture(slot.artwork.imagem);
-  const image = useRef<THREE.Mesh>(null);
-
-  useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    const mesh = image.current;
-    if (!mesh) return;
-    registry.current.set(mesh, slot.artwork);
-    return () => {
-      registry.current.delete(mesh);
-    };
-  }, [registry, slot.artwork, texture]);
-
-  return <group position={slot.position} rotation={slot.rotation}>
-    <mesh position={[0, 0.68, -0.1]}><boxGeometry args={[1.46, 1.76, 0.12]} /><meshStandardMaterial color="#4c2e13" roughness={0.45} metalness={0.25} /></mesh>
-    <mesh position={[0, 0.68, -0.038]}><planeGeometry args={[1.34, 1.6]} /><meshBasicMaterial color="#d9a749" /></mesh>
-    <mesh ref={image} position={[0, 0.68, -0.03]}><planeGeometry args={[1.24, 1.5]} /><meshBasicMaterial map={texture} toneMapped={false} /></mesh>
   </group>;
 }
 
@@ -1406,6 +1485,7 @@ export function MuseumScene({
       entranceOpen={entranceOpen}
       internalDoorsOpen={stableInternalDoors}
       doorRegistry={doorRegistry}
+      isMobile={isMobile}
     />
     <GalleryControls
       active={active}
@@ -1424,7 +1504,7 @@ export function MuseumScene({
     />
     {artworkSlots.map((slot) => (
       <Suspense fallback={null} key={slot.artwork.slug}>
-        <LoadedArtwork slot={slot} registry={registry} />
+        <GalleryArtwork slot={slot} registry={registry} />
       </Suspense>
     ))}
   </>;

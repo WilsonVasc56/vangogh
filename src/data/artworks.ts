@@ -10,6 +10,9 @@ export interface Artwork {
   museu: string;
   descricao: string;
   imagem: string;
+  /** Dimensões reais da tela (fase 2). Quando ausentes, o museu usa o aspecto do JPEG. */
+  larguraCm?: number;
+  alturaCm?: number;
 }
 
 interface ArtworkMeta {
@@ -20,6 +23,8 @@ interface ArtworkMeta {
   wikiTitle: string;
   museu: string;
   descricao: string;
+  larguraCm?: number;
+  alturaCm?: number;
 }
 
 // Conteúdo curado e parafraseado a partir dos artigos da Wikipedia (CC BY-SA).
