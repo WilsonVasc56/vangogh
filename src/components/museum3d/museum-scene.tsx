@@ -739,6 +739,184 @@ function Visitor({
 
 const visitorTints = ["#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f"];
 
+/* ---------------------------------------------------------------------- */
+/* Visitante que percorre a sala como em um museu real                     */
+/* ---------------------------------------------------------------------- */
+
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function dampAngle(current: number, target: number, lambda: number, delta: number) {
+  let diff = target - current;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return current + diff * (1 - Math.exp(-lambda * delta));
+}
+
+interface Waypoint {
+  x: number;
+  z: number;
+  viewYaw?: number;
+  dwell?: number;
+}
+
+// Roteiro coerente: desce pela parede esquerda observando obras, cruza a sala
+// na extremidade do fundo (longe do banco central), sobe pela parede direita
+// e retorna pela extremidade da entrada — sempre em loop.
+function buildTour(room: RoomConfig, seed: number): Waypoint[] {
+  const rand = mulberry32(seed);
+  const leftRows = Math.ceil(room.items.length / 2);
+  const rightRows = Math.floor(room.items.length / 2);
+  const rowZ = (row: number) => room.startZ - 2.7 - row * 2.25;
+  const crossFar = room.endZ + 2.2;
+  const crossNear = room.startZ - 2.2;
+  const skipRightRow = room.items.length > 3 ? 1 : 0; // obra ocupada pelo visitante estático
+  const tour: Waypoint[] = [];
+
+  for (let row = 0; row < leftRows; row++) {
+    if (row === 0 && leftRows > 1) continue;
+    if (rand() < 0.8) {
+      tour.push({
+        x: -6.45,
+        z: rowZ(row) - 0.5,
+        viewYaw: Math.PI / 2,
+        dwell: 2.5 + rand() * 3.5,
+      });
+    }
+  }
+  tour.push({ x: -3, z: crossFar }, { x: 3, z: crossFar });
+  for (let row = rightRows - 1; row >= 0; row--) {
+    if (row === skipRightRow) continue;
+    if (rand() < 0.8) {
+      tour.push({
+        x: 6.45,
+        z: rowZ(row) + 0.5,
+        viewYaw: -Math.PI / 2,
+        dwell: 2.5 + rand() * 3.5,
+      });
+    }
+  }
+  tour.push({ x: 3, z: crossNear }, { x: -3, z: crossNear });
+  return tour;
+}
+
+function RoamingVisitor({
+  room,
+  seed,
+  tint = "#ffffff",
+  scale = 1,
+}: {
+  room: RoomConfig;
+  seed: number;
+  tint?: string;
+  scale?: number;
+}) {
+  const [gltf, setGltf] = useState<GLTF | null>(null);
+  const person = useRef<THREE.Group>(null);
+  const { actions } = useAnimations(gltf?.animations ?? [], person);
+  const tour = useMemo(() => buildTour(room, seed), [room, seed]);
+  const state = useRef({
+    wp: 0,
+    mode: "walk" as "walk" | "view",
+    timer: 0,
+    yaw: Math.PI / 2,
+    speed: 1 + mulberry32(seed)() * 0.5,
+  });
+  const currentAnim = useRef<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    new GLTFLoader().load(
+      VISITOR_MODEL,
+      (loaded) => {
+        if (!alive) return;
+        loaded.scene.traverse((object) => {
+          const mesh = object as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          mesh.castShadow = true;
+          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
+            (material) => {
+              if (/body/i.test(material.name)) {
+                (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
+              }
+            },
+          );
+        });
+        setGltf(loaded);
+      },
+      undefined,
+      () => setGltf(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [tint]);
+
+  useFrame((_, delta) => {
+    if (!person.current || tour.length === 0) return;
+    const s = state.current;
+
+    const setAnim = (name: "Walk" | "Idle") => {
+      if (currentAnim.current === name) return;
+      const next = actions[name];
+      if (!next) return;
+      const previous = currentAnim.current ? actions[currentAnim.current] : null;
+      next.reset().fadeIn(0.3).play();
+      previous?.fadeOut(0.3);
+      currentAnim.current = name;
+    };
+
+    const target = tour[s.wp];
+    if (s.mode === "view") {
+      setAnim("Idle");
+      s.timer -= delta;
+      s.yaw = dampAngle(s.yaw, target.viewYaw ?? s.yaw, 8, delta);
+      if (s.timer <= 0) {
+        s.mode = "walk";
+        s.wp = (s.wp + 1) % tour.length;
+      }
+    } else {
+      setAnim("Walk");
+      const dx = target.x - person.current.position.x;
+      const dz = target.z - person.current.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.08) {
+        if (target.viewYaw !== undefined) {
+          s.mode = "view";
+          s.timer = target.dwell ?? 3;
+        } else {
+          s.wp = (s.wp + 1) % tour.length;
+        }
+      } else {
+        const step = Math.min(dist, s.speed * delta);
+        person.current.position.x += (dx / dist) * step;
+        person.current.position.z += (dz / dist) * step;
+        s.yaw = dampAngle(s.yaw, Math.atan2(-dx, -dz), 10, delta);
+      }
+    }
+    person.current.rotation.y = s.yaw;
+  });
+
+  return (
+    <group
+      ref={person}
+      position={[-3, 0, room.startZ - 2.2]}
+      rotation={[0, Math.PI / 2, 0]}
+      scale={scale}
+    >
+      {gltf && <primitive object={gltf.scene} />}
+    </group>
+  );
+}
+
 function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
   const firstPaintingZ = room.startZ - 2.7;
   const secondRowZ = room.startZ - 4.95;
@@ -763,12 +941,11 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
         scale={0.96 + ((index + 1) % 3) * 0.04}
       />
 
-      {/* Visitante caminhando pelo corredor central */}
-      <Visitor
-        position={[index % 2 === 0 ? -1.45 : 1.45, 0, room.centerZ]}
+      {/* Visitante percorrendo a sala como em um museu real */}
+      <RoamingVisitor
+        room={room}
+        seed={index * 97 + 13}
         tint={visitorTints[(index + 1) % visitorTints.length]}
-        walkingRange={Math.min(3.2, room.length * 0.2)}
-        phase={index * 1.3}
         scale={1 + (index % 2) * 0.04}
       />
     </Suspense>
