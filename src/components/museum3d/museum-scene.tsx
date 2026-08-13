@@ -1,6 +1,6 @@
 "use client";
 
-import { Html, useTexture } from "@react-three/drei";
+import { Html, useAnimations, useGLTF, useTexture } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Suspense,
@@ -656,94 +656,106 @@ function MuseumBench({
   </group>;
 }
 
+const VISITOR_MODEL = "/models/visitor.glb";
+
+// Humanos 3D com esqueleto animado (caminhar/parado). Cada instância clona o
+// modelo e os materiais para variar a cor da roupa sem vazar entre visitantes.
 function Visitor({
   position,
   rotationY = 0,
-  shirt,
-  trousers,
+  tint = "#ffffff",
   walkingRange = 0,
   phase = 0,
+  scale = 1,
 }: {
   position: [number, number, number];
   rotationY?: number;
-  shirt: string;
-  trousers: string;
+  tint?: string;
   walkingRange?: number;
   phase?: number;
+  scale?: number;
 }) {
+  const { scene, animations } = useGLTF(VISITOR_MODEL);
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.material = (
+        Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      ).map((material) => {
+        const copy = material.clone() as THREE.MeshStandardMaterial;
+        if (/body/i.test(copy.name)) copy.color = new THREE.Color(tint);
+        return copy;
+      }) as THREE.Material | THREE.Material[];
+    });
+    return clone;
+  }, [scene, tint]);
   const person = useRef<THREE.Group>(null);
-  const leftArm = useRef<THREE.Group>(null);
-  const rightArm = useRef<THREE.Group>(null);
-  const leftLeg = useRef<THREE.Group>(null);
-  const rightLeg = useRef<THREE.Group>(null);
+  const { actions } = useAnimations(animations, person);
   const elapsed = useRef(phase);
+
+  useEffect(() => {
+    const action = walkingRange ? actions.Walk : actions.Idle;
+    if (!action) return;
+    action.timeScale = walkingRange ? 0.72 : 1;
+    action.reset().play();
+    return () => {
+      action.stop();
+    };
+  }, [actions, walkingRange]);
 
   useFrame((_, delta) => {
     if (!walkingRange || !person.current) return;
-    elapsed.current += delta * 0.62;
+    elapsed.current += delta * 0.55;
     const wave = Math.sin(elapsed.current);
     person.current.position.z = position[2] + wave * walkingRange;
-    person.current.rotation.y = Math.cos(elapsed.current) >= 0 ? 0 : Math.PI;
-    const stride = Math.cos(elapsed.current * 2) * 0.34;
-    if (leftArm.current) leftArm.current.rotation.x = stride;
-    if (rightArm.current) rightArm.current.rotation.x = -stride;
-    if (leftLeg.current) leftLeg.current.rotation.x = -stride;
-    if (rightLeg.current) rightLeg.current.rotation.x = stride;
+    person.current.rotation.y =
+      Math.cos(elapsed.current) >= 0 ? rotationY : rotationY + Math.PI;
   });
 
-  return <group ref={person} position={position} rotation={[0, rotationY, 0]}>
-    <group ref={leftLeg} position={[-0.16, 0.82, 0]}>
-      <mesh position={[0, -0.39, 0]}><boxGeometry args={[0.22, 0.78, 0.24]} /><meshStandardMaterial color={trousers} roughness={0.9} /></mesh>
-      <mesh position={[0, -0.78, 0.09]}><boxGeometry args={[0.24, 0.12, 0.43]} /><meshStandardMaterial color="#211d1b" roughness={0.75} /></mesh>
-    </group>
-    <group ref={rightLeg} position={[0.16, 0.82, 0]}>
-      <mesh position={[0, -0.39, 0]}><boxGeometry args={[0.22, 0.78, 0.24]} /><meshStandardMaterial color={trousers} roughness={0.9} /></mesh>
-      <mesh position={[0, -0.78, 0.09]}><boxGeometry args={[0.24, 0.12, 0.43]} /><meshStandardMaterial color="#211d1b" roughness={0.75} /></mesh>
-    </group>
-    <mesh position={[0, 1.22, 0]}><boxGeometry args={[0.64, 0.86, 0.36]} /><meshStandardMaterial color={shirt} roughness={0.86} /></mesh>
-    <group ref={leftArm} position={[-0.39, 1.48, 0]}>
-      <mesh position={[0, -0.34, 0]}><capsuleGeometry args={[0.1, 0.55, 5, 8]} /><meshStandardMaterial color={shirt} roughness={0.86} /></mesh>
-    </group>
-    <group ref={rightArm} position={[0.39, 1.48, 0]}>
-      <mesh position={[0, -0.34, 0]}><capsuleGeometry args={[0.1, 0.55, 5, 8]} /><meshStandardMaterial color={shirt} roughness={0.86} /></mesh>
-    </group>
-    <mesh position={[0, 1.92, 0]}><sphereGeometry args={[0.25, 14, 10]} /><meshStandardMaterial color="#c99672" roughness={0.9} /></mesh>
-    <mesh position={[0, 2.08, -0.03]} scale={[1.04, 0.52, 1.02]}><sphereGeometry args={[0.255, 14, 8]} /><meshStandardMaterial color="#3a2b24" roughness={0.94} /></mesh>
-    <mesh position={[0, 1.91, 0.245]}><sphereGeometry args={[0.045, 8, 6]} /><meshStandardMaterial color="#b67d5d" roughness={0.9} /></mesh>
+  return <group ref={person} position={position} rotation={[0, rotationY, 0]} scale={scale}>
+    <primitive object={model} />
   </group>;
 }
+useGLTF.preload(VISITOR_MODEL);
 
-const visitorPalettes = [
-  ["#7d3941", "#252b3b"],
-  ["#315a69", "#3b332e"],
-  ["#8a6a32", "#28323c"],
-  ["#5b4770", "#34343b"],
-  ["#41644d", "#312c2a"],
-];
+const visitorTints = ["#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f"];
 
 function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
   const firstPaintingZ = room.startZ - 2.7;
   const secondRowZ = room.startZ - 4.95;
-  const [shirt, trousers] = visitorPalettes[index];
-  const nextPalette = visitorPalettes[(index + 2) % visitorPalettes.length];
 
   return <group>
     <MuseumVase position={[-6.65, 0, room.startZ - 1.15]} color={room.accent} />
     <MuseumVase position={[6.65, 0, room.endZ + 1.25]} color={index % 2 ? "#586f83" : "#9a6845"} />
     <MuseumBench position={[0, 0, room.centerZ]} rotationY={Math.PI / 2} />
 
-    {/* Visitantes parados diante das obras */}
-    <Visitor position={[-6.7, 0, firstPaintingZ]} rotationY={-Math.PI / 2} shirt={shirt} trousers={trousers} />
-    <Visitor position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]} rotationY={Math.PI / 2} shirt={nextPalette[0]} trousers={nextPalette[1]} />
+    {/* Visitantes humanos parados diante das obras */}
+    <Suspense fallback={null}>
+      <Visitor
+        position={[-6.7, 0, firstPaintingZ]}
+        rotationY={-Math.PI / 2}
+        tint={visitorTints[index]}
+        scale={0.98 + (index % 3) * 0.03}
+      />
+      <Visitor
+        position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
+        rotationY={Math.PI / 2}
+        tint={visitorTints[(index + 2) % visitorTints.length]}
+        scale={0.96 + ((index + 1) % 3) * 0.04}
+      />
 
-    {/* Visitante caminhando pelo corredor central */}
-    <Visitor
-      position={[index % 2 === 0 ? -1.45 : 1.45, 0, room.centerZ]}
-      shirt={visitorPalettes[(index + 1) % visitorPalettes.length][0]}
-      trousers={visitorPalettes[(index + 1) % visitorPalettes.length][1]}
-      walkingRange={Math.min(3.2, room.length * 0.2)}
-      phase={index * 1.3}
-    />
+      {/* Visitante caminhando pelo corredor central */}
+      <Visitor
+        position={[index % 2 === 0 ? -1.45 : 1.45, 0, room.centerZ]}
+        tint={visitorTints[(index + 1) % visitorTints.length]}
+        walkingRange={Math.min(3.2, room.length * 0.2)}
+        phase={index * 1.3}
+        scale={1 + (index % 2) * 0.04}
+      />
+    </Suspense>
   </group>;
 }
 
