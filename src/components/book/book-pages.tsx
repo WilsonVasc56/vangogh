@@ -55,6 +55,9 @@ function PageShell({
       className={cn(
         "relative h-full w-full overflow-hidden bg-[#f2e8d0] font-book text-[#37291a]",
         "shadow-[inset_0_0_46px_rgba(96,74,40,0.20)]",
+        // Container query: o corpo do texto usa cqw para escalar com a largura
+        // real de cada página (500px no espelho, ~290px no retrato mobile).
+        "[container-type:inline-size]",
       )}
       {...rest}
     >
@@ -195,14 +198,14 @@ function TocPage({
                 onClick={() => onNavigate(e.indice)}
                 className="group flex w-full items-baseline gap-2 text-left transition-colors hover:text-[#8a5a10]"
               >
-                <span className="text-[0.78rem] font-semibold leading-snug">
+                <span className="text-[0.85rem] font-semibold leading-snug">
                   {e.rotulo}
                 </span>
                 <span
                   aria-hidden
                   className="mx-1 flex-1 border-b border-dotted border-[#8a6d3b]/50"
                 />
-                <span className="shrink-0 text-right text-[0.65rem] uppercase tracking-wider text-[#8a6d3b]">
+                <span className="shrink-0 text-right text-[0.7rem] uppercase tracking-wider text-[#8a6d3b]">
                   {e.detalhe}
                   <span className="ml-2 text-[#5a4020]">pág. {e.indice + 1}</span>
                 </span>
@@ -225,25 +228,25 @@ function ChapterOpenerPage({
 }: { capitulo: BookChapter } & RefDiv) {
   return (
     <PageShell className="flex flex-col" ref={ref}>
-      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-        <span className="text-[0.6rem] uppercase tracking-[0.4em] text-[#8a6d3b]">
+      <div className="flex flex-1 flex-col items-center justify-center px-8 py-6 text-center">
+        <span className="text-[0.65rem] uppercase tracking-[0.4em] text-[#8a6d3b]">
           Capítulo {capitulo.numero}
         </span>
-        <h2 className="mt-4 font-serif text-[1.7rem] leading-tight text-[#4a3418]">
+        <h2 className="mt-5 font-serif text-[2.1rem] leading-tight text-[#4a3418]">
           {capitulo.titulo}
         </h2>
-        <div className="mt-3 flex items-center gap-3 text-[0.7rem] uppercase tracking-[0.2em] text-[#8a6d3b]">
+        <div className="mt-4 flex items-center gap-3 text-[0.78rem] uppercase tracking-[0.2em] text-[#8a6d3b]">
           <span>{capitulo.anos}</span>
           <span aria-hidden>·</span>
           <span>{capitulo.local}</span>
         </div>
-        <span aria-hidden className="mt-6 text-2xl text-[#b89b5e]">
+        <span aria-hidden className="mt-8 text-3xl text-[#b89b5e]">
           ❦
         </span>
         {capitulo.epigrafe && (
-          <blockquote className="mt-6 max-w-[30ch] text-[0.95rem] italic leading-relaxed text-[#5a4020]/90">
+          <blockquote className="mt-8 max-w-[30ch] text-[1.05rem] italic leading-relaxed text-[#5a4020]/90">
             “{capitulo.epigrafe.texto}”
-            <footer className="mt-3 text-[0.62rem] uppercase tracking-[0.18em] not-italic text-[#8a6d3b]">
+            <footer className="mt-3 text-[0.66rem] uppercase tracking-[0.18em] not-italic text-[#8a6d3b]">
               {capitulo.epigrafe.fonte}
             </footer>
           </blockquote>
@@ -272,15 +275,15 @@ function TextPageView({
   return (
     <PageShell ref={ref} className="flex flex-col px-7 py-5">
       <CabecalhoPagina titulo={capitulo.titulo} />
-      <div className="mt-5 min-h-0 flex-1 space-y-4">
+      <div className="mt-5 min-h-0 flex-1 space-y-5">
         {pagina.paragrafos.map((p, i) => (
           <p
             key={i}
             className={cn(
-              "text-justify text-[0.93rem] leading-[1.8] text-[#37291a]",
+              "text-justify text-[length:clamp(0.82rem,4cqw,1.28rem)] leading-[1.85] text-[#37291a]",
               primeiraDoCapitulo &&
                 i === 0 &&
-                "first-letter:float-left first-letter:mr-2 first-letter:font-serif first-letter:text-[3.1em] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[#7a5a24]",
+                "first-letter:float-left first-letter:mr-2 first-letter:font-serif first-letter:text-[3.6em] first-letter:font-semibold first-letter:leading-[0.85] first-letter:text-[#7a5a24]",
             )}
           >
             {p}
@@ -300,7 +303,7 @@ function FichaTecnica({ obra }: { obra: Artwork }) {
       ? `${obra.larguraCm} × ${obra.alturaCm} cm`
       : null;
   return (
-    <dl className="space-y-1 text-[0.72rem] leading-relaxed">
+    <dl className="space-y-1.5 text-[0.8rem] leading-relaxed">
       <div className="flex gap-2">
         <dt className="w-16 shrink-0 uppercase tracking-wider text-[#8a6d3b]">Obra</dt>
         <dd className="font-semibold">{obra.titulo}</dd>
@@ -385,14 +388,16 @@ function ArtworkPageView({
   return (
     <PageShell ref={ref} className="flex flex-col px-7 py-5">
       <CabecalhoPagina titulo={capitulo.titulo} />
-      <div className="mt-4 min-h-0 flex-1">
-        <ImagemObra obra={obra} onZoom={onZoom} className="h-[58%]" />
+      <div className="mt-4 flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1">
+          <ImagemObra obra={obra} onZoom={onZoom} className="h-full" />
+        </div>
         {pagina.legenda && (
-          <p className="mt-3 text-center text-[0.78rem] italic leading-snug text-[#5a4020]/85">
+          <p className="mt-4 text-center text-[0.84rem] italic leading-snug text-[#5a4020]/85">
             {pagina.legenda}
           </p>
         )}
-        <div className="mt-3 border-t border-[#b89b5e]/40 pt-3">
+        <div className="mt-4 border-t border-[#b89b5e]/40 pt-3.5">
           <FichaTecnica obra={obra} />
         </div>
       </div>
@@ -417,17 +422,20 @@ function TextoObraPageView({
   return (
     <PageShell ref={ref} className="flex flex-col px-7 py-5">
       <CabecalhoPagina titulo={capitulo.titulo} />
-      <div className="mt-4 min-h-0 flex-1 space-y-3">
-        {obra && <ImagemObra obra={obra} onZoom={onZoom} className="h-[46%]" />}
-        <div className="space-y-3">
+      <div className="mt-4 min-h-0 flex-1 space-y-4">
+        {obra && <ImagemObra obra={obra} onZoom={onZoom} className="h-[48%]" />}
+        <div className="space-y-4">
           {pagina.paragrafos.map((p, i) => (
-            <p key={i} className="text-justify text-[0.9rem] leading-[1.75]">
+            <p
+              key={i}
+              className="text-justify text-[length:clamp(0.82rem,3.4cqw,1.05rem)] leading-[1.8]"
+            >
               {p}
             </p>
           ))}
         </div>
         {obra && (
-          <p className="text-center text-[0.66rem] uppercase tracking-[0.18em] text-[#8a6d3b]">
+          <p className="text-center text-[0.7rem] uppercase tracking-[0.18em] text-[#8a6d3b]">
             {obra.titulo} · {obra.ano}
           </p>
         )}
@@ -452,15 +460,18 @@ function ContextoPageView({
       <CabecalhoPagina titulo={capitulo.titulo} />
       <div className="mt-5 flex min-h-0 flex-1 flex-col justify-center">
         <div className="border border-[#b89b5e]/60 bg-[#eaddc0]/70 px-6 py-6 shadow-[inset_0_0_24px_rgba(120,90,40,0.12)]">
-          <p className="text-[0.6rem] uppercase tracking-[0.3em] text-[#8a6d3b]">
+          <p className="text-[0.66rem] uppercase tracking-[0.3em] text-[#8a6d3b]">
             Contexto
           </p>
-          <h3 className="mt-2 font-serif text-xl text-[#4a3418]">
+          <h3 className="mt-2 font-serif text-2xl text-[#4a3418]">
             {pagina.titulo}
           </h3>
-          <div className="mt-4 space-y-3">
+          <div className="mt-5 space-y-4">
             {pagina.paragrafos.map((p, i) => (
-              <p key={i} className="text-justify text-[0.88rem] leading-[1.75]">
+              <p
+                key={i}
+                className="text-justify text-[length:clamp(0.85rem,3.6cqw,1.1rem)] leading-[1.8]"
+              >
                 {p}
               </p>
             ))}
@@ -493,17 +504,17 @@ function TimelinePageView({
       <CabecalhoPagina
         titulo={totalPartes > 1 ? `Linha do tempo · ${parte}/${totalPartes}` : "Linha do tempo"}
       />
-      <h2 className="mt-4 text-center font-serif text-xl text-[#4a3418]">
+      <h2 className="mt-4 text-center font-serif text-2xl text-[#4a3418]">
         1853 – 1973
       </h2>
-      <ol className="mt-5 min-h-0 flex-1 space-y-0 border-l border-[#b89b5e]/60 pl-5">
+      <ol className="mt-4 min-h-0 flex-1 space-y-0 border-l border-[#b89b5e]/60 pl-5">
         {marcos.map((m) => (
           <li key={m.ano} className="relative pb-3 last:pb-0">
             <span className="absolute top-[0.45em] -left-[24.5px] h-2 w-2 rounded-full border border-[#8a6d3b] bg-[#f2e8d0]" />
-            <span className="font-serif text-[0.95rem] font-semibold text-[#7a5a24]">
+            <span className="font-serif text-[length:clamp(0.9rem,3.4cqw,1.05rem)] font-semibold text-[#7a5a24]">
               {m.ano}
             </span>
-            <p className="text-[0.78rem] leading-snug text-[#37291a]/90">
+            <p className="text-[length:clamp(0.68rem,3cqw,0.92rem)] leading-snug text-[#37291a]/90">
               {m.evento}
             </p>
           </li>
@@ -531,10 +542,10 @@ function ReferencesPageView({
       <CabecalhoPagina
         titulo={totalPartes > 1 ? `Referências · ${parte}/${totalPartes}` : "Referências"}
       />
-      <h2 className="mt-4 text-center font-serif text-xl text-[#4a3418]">
+      <h2 className="mt-4 text-center font-serif text-2xl text-[#4a3418]">
         Fontes consultadas
       </h2>
-      <ol className="mt-5 min-h-0 flex-1 list-decimal space-y-2.5 pl-5 text-[0.74rem] leading-relaxed">
+      <ol className="mt-5 min-h-0 flex-1 list-decimal space-y-3 pl-5 text-[length:clamp(0.72rem,3.1cqw,0.9rem)] leading-relaxed">
         {fontes.map((f) => (
           <li key={f.url}>
             <a
@@ -559,11 +570,11 @@ function ReferencesPageView({
 function CreditsPage({ ref }: RefDiv) {
   return (
     <PageShell ref={ref} className="flex flex-col items-center justify-center px-8 py-6 text-center">
-      <p className="text-[0.6rem] uppercase tracking-[0.35em] text-[#8a6d3b]">
+      <p className="text-[0.66rem] uppercase tracking-[0.35em] text-[#8a6d3b]">
         Colofão
       </p>
-      <h2 className="mt-3 font-serif text-xl text-[#4a3418]">Créditos</h2>
-      <div className="mt-5 max-w-[34ch] space-y-3 text-[0.76rem] leading-relaxed text-[#37291a]/90">
+      <h2 className="mt-3 font-serif text-2xl text-[#4a3418]">Créditos</h2>
+      <div className="mt-6 max-w-[34ch] space-y-4 text-[0.84rem] leading-relaxed text-[#37291a]/90">
         <p>
           Livro digital do Museu Virtual Van Gogh — projeto educativo sem fins
           lucrativos.
