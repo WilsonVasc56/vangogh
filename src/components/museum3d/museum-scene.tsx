@@ -33,6 +33,11 @@ export interface MobileInput {
   lookY: number;
 }
 
+// Ferramenta de QA: abrir /museu#debug-walk permite caminhar sem pointer lock
+// (útil em ambientes headless/automação, onde o navegador bloqueia o lock).
+const debugFreeRoam =
+  typeof window !== "undefined" && window.location.hash === "#debug-walk";
+
 interface RoomConfig {
   id: PeriodId;
   name: string;
@@ -371,6 +376,11 @@ function GalleryControls({
         if (artwork) onArtworkSelect(artwork);
       }
     }
+    if (debugFreeRoam && document.pointerLockElement !== gl.domElement) {
+      // Olhar sem pointer lock em automação/QA.
+      if (keys.current.has("KeyQ")) yaw.current += delta * 1.8;
+      if (keys.current.has("KeyE")) yaw.current -= delta * 1.8;
+    }
     camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
 
     internalDoorBoundaries.forEach((boundary, index) => {
@@ -388,7 +398,7 @@ function GalleryControls({
       onRoomChange(nextRoom);
     }
 
-    if (!active || (!isMobile && document.pointerLockElement !== gl.domElement)) return;
+    if (!active || (!isMobile && !debugFreeRoam && document.pointerLockElement !== gl.domElement)) return;
 
     const forward = new THREE.Vector2(-Math.sin(yaw.current), -Math.cos(yaw.current));
     const strafe = new THREE.Vector2(Math.cos(yaw.current), -Math.sin(yaw.current));
@@ -653,87 +663,167 @@ function MuseumBench({
   </group>;
 }
 
-const VISITOR_MODEL = "/models/visitor.glb";
-// O rig do modelo olha para -Z; compensa 180° para alinhar frente/movimento.
-const VISITOR_FORWARD_OFFSET = Math.PI;
+/* ---------------------------------------------------------------------- */
+/* Modelos humanos: registry de GLBs + aparência determinística           */
+/* ---------------------------------------------------------------------- */
 
-// Humanos 3D com esqueleto animado (caminhar/parado). Cada visitante carrega a
-// própria instância do GLB: clonar SkinnedMesh quebra o rig e torna o modelo
-// invisível, então o arquivo (em cache HTTP) é parseado por instância.
-function Visitor({
-  position,
-  rotationY = 0,
-  tint = "#ffffff",
-  walkingRange = 0,
-  phase = 0,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  rotationY?: number;
-  tint?: string;
-  walkingRange?: number;
-  phase?: number;
-  scale?: number;
-}) {
-  const [gltf, setGltf] = useState<GLTF | null>(null);
-  const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(gltf?.animations ?? [], person);
-  const elapsed = useRef(phase);
+interface VisitorModelConfig {
+  id: string;
+  url: string;
+  /** Clips candidatos, na ordem de preferência (cada GLB nomeia diferente). */
+  idle: string[];
+  walk: string[];
+  walkTimeScale: number;
+  /** Materiais que recebem tint; null = textura original, sem recolorir. */
+  tintPattern: RegExp | null;
+  /**
+   * Quanto somar a um yaw expresso na convenção "frente +Z" para alinhar o
+   * rig. visitor.glb (Mixamo/Soldier) olha para -Z e precisa de 180°;
+   * os KayKit seguem o padrão glTF (frente +Z) e não precisam de ajuste.
+   */
+  forwardOffset: number;
+}
+
+const VISITOR_MODELS: VisitorModelConfig[] = [
+  { id: "soldier", url: "/models/visitor.glb", idle: ["Idle"], walk: ["Walk"], walkTimeScale: 0.72, tintPattern: /body/i, forwardOffset: Math.PI },
+  { id: "barbarian", url: "/models/barbarian.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "knight", url: "/models/knight.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "mage", url: "/models/mage.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "rogue", url: "/models/rogue.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "rogue_hooded", url: "/models/rogue_hooded.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "xbot", url: "/models/xbot.glb", idle: ["idle"], walk: ["walk"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+];
+
+// Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
+// já trazem texturas próprias e não são recoloridos).
+const visitorTints = [
+  "#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f",
+  "#274156", "#7a4a5e", "#4f6134", "#845c2c",
+];
+
+interface VisitorAppearance {
+  model: VisitorModelConfig;
+  tint: string | null;
+  height: number;
+}
+
+// Aparência determinística: o modelo é atribuído por slot (garantindo modelos
+// distintos dentro de cada sala) e a seed varia cor (quando tingível) e altura,
+// para que nenhum dos visitantes pareça clone de outro.
+function resolveVisitorAppearance(
+  modelIndex: number,
+  seed: number,
+): VisitorAppearance {
+  const rand = mulberry32(seed);
+  const model = VISITOR_MODELS[modelIndex % VISITOR_MODELS.length];
+  const tint = model.tintPattern
+    ? visitorTints[Math.floor(rand() * visitorTints.length)]
+    : null;
+  const height = 1.62 + rand() * 0.28;
+  return { model, tint, height };
+}
+
+function resolveClip(
+  actions: Record<string, THREE.AnimationAction | null>,
+  candidates: string[],
+) {
+  for (const name of candidates) {
+    const action = actions[name];
+    if (action) return action;
+  }
+  return null;
+}
+
+interface LoadedVisitorModel {
+  gltf: GLTF;
+  /** Escala que normaliza a altura nativa do GLB para a altura desejada. */
+  scale: number;
+}
+
+// Carrega o GLB do modelo, aplica sombras/tint e mede a altura nativa para
+// normalizar personagens de fontes diferentes (Mixamo, KayKit, Xbot).
+// Cada visitante carrega a própria instância: clonar SkinnedMesh quebra o
+// rig e torna o modelo invisível, então o arquivo (em cache HTTP) é parseado
+// por instância.
+function useVisitorModel(
+  config: VisitorModelConfig,
+  tint: string | null,
+  height: number,
+): LoadedVisitorModel | null {
+  const [loaded, setLoaded] = useState<LoadedVisitorModel | null>(null);
 
   useEffect(() => {
     let alive = true;
     new GLTFLoader().load(
-      VISITOR_MODEL,
-      (loaded) => {
+      config.url,
+      (gltf) => {
         if (!alive) return;
-        loaded.scene.traverse((object) => {
+        gltf.scene.traverse((object) => {
           const mesh = object as THREE.Mesh;
           if (!mesh.isMesh) return;
           mesh.castShadow = true;
+          if (!config.tintPattern || !tint) return;
           (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
             (material) => {
-              if (/body/i.test(material.name)) {
+              if (config.tintPattern!.test(material.name)) {
                 (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
               }
             },
           );
         });
-        setGltf(loaded);
+        const size = new THREE.Box3()
+          .setFromObject(gltf.scene)
+          .getSize(new THREE.Vector3());
+        const scale = size.y > 0.01 ? height / size.y : 1;
+        setLoaded({ gltf, scale });
       },
       undefined,
-      () => setGltf(null),
+      () => {
+        if (alive) setLoaded(null);
+      },
     );
     return () => {
       alive = false;
     };
-  }, [tint]);
+  }, [config, tint, height]);
+
+  return loaded;
+}
+
+// Humano parado diante de uma obra (animação Idle), com aparência única
+// derivada da seed.
+function Visitor({
+  position,
+  rotationY = 0,
+  modelIndex,
+  seed,
+}: {
+  position: [number, number, number];
+  rotationY?: number;
+  modelIndex: number;
+  seed: number;
+}) {
+  const appearance = useMemo(
+    () => resolveVisitorAppearance(modelIndex, seed),
+    [modelIndex, seed],
+  );
+  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
+  const person = useRef<THREE.Group>(null);
+  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
 
   useEffect(() => {
-    const action = walkingRange ? actions.Walk : actions.Idle;
+    const action = resolveClip(actions, appearance.model.idle);
     if (!action) return;
-    action.timeScale = walkingRange ? 0.72 : 1;
     action.reset().play();
     return () => {
       action.stop();
     };
-  }, [actions, walkingRange]);
+  }, [actions, appearance]);
 
-  useFrame((_, delta) => {
-    if (!walkingRange || !person.current) return;
-    elapsed.current += delta * 0.55;
-    const wave = Math.sin(elapsed.current);
-    person.current.position.z = position[2] + wave * walkingRange;
-    person.current.rotation.y =
-      (Math.cos(elapsed.current) >= 0 ? rotationY : rotationY + Math.PI) +
-      VISITOR_FORWARD_OFFSET;
-  });
-
-  return <group ref={person} position={position} rotation={[0, rotationY + VISITOR_FORWARD_OFFSET, 0]} scale={scale}>
-    {gltf && <primitive object={gltf.scene} />}
+  return <group ref={person} position={position} rotation={[0, rotationY + appearance.model.forwardOffset, 0]}>
+    {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
   </group>;
 }
-
-const visitorTints = ["#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f"];
 
 /* ---------------------------------------------------------------------- */
 /* Visitante que percorre a sala como em um museu real                     */
@@ -806,19 +896,24 @@ function buildTour(room: RoomConfig, seed: number): Waypoint[] {
 
 function RoamingVisitor({
   room,
+  modelIndex,
   seed,
-  tint = "#ffffff",
-  scale = 1,
 }: {
   room: RoomConfig;
+  modelIndex: number;
   seed: number;
-  tint?: string;
-  scale?: number;
 }) {
-  const [gltf, setGltf] = useState<GLTF | null>(null);
+  const appearance = useMemo(
+    () => resolveVisitorAppearance(modelIndex, seed * 31 + 7),
+    [modelIndex, seed],
+  );
+  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
   const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(gltf?.animations ?? [], person);
+  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
   const tour = useMemo(() => buildTour(room, seed), [room, seed]);
+  // s.yaw segue a convenção do roteiro (frente -Z); o offset do modelo alinha
+  // rigs que olham para +Z (glTF padrão) ou -Z (Mixamo).
+  const yawOffset = appearance.model.forwardOffset - Math.PI;
   const state = useRef({
     wp: 0,
     mode: "walk" as "walk" | "view",
@@ -826,53 +921,34 @@ function RoamingVisitor({
     yaw: Math.PI / 2,
     speed: 1 + mulberry32(seed)() * 0.5,
   });
-  const currentAnim = useRef<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    new GLTFLoader().load(
-      VISITOR_MODEL,
-      (loaded) => {
-        if (!alive) return;
-        loaded.scene.traverse((object) => {
-          const mesh = object as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.castShadow = true;
-          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
-            (material) => {
-              if (/body/i.test(material.name)) {
-                (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
-              }
-            },
-          );
-        });
-        setGltf(loaded);
-      },
-      undefined,
-      () => setGltf(null),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [tint]);
+  const currentAnim = useRef<"walk" | "idle" | null>(null);
 
   useFrame((_, delta) => {
     if (!person.current || tour.length === 0) return;
     const s = state.current;
 
-    const setAnim = (name: "Walk" | "Idle") => {
-      if (currentAnim.current === name) return;
-      const next = actions[name];
+    const setAnim = (kind: "walk" | "idle") => {
+      if (currentAnim.current === kind) return;
+      const next = resolveClip(
+        actions,
+        kind === "walk" ? appearance.model.walk : appearance.model.idle,
+      );
       if (!next) return;
-      const previous = currentAnim.current ? actions[currentAnim.current] : null;
+      const previous = resolveClip(
+        actions,
+        currentAnim.current === "walk"
+          ? appearance.model.walk
+          : appearance.model.idle,
+      );
+      next.timeScale = kind === "walk" ? appearance.model.walkTimeScale : 1;
       next.reset().fadeIn(0.3).play();
       previous?.fadeOut(0.3);
-      currentAnim.current = name;
+      currentAnim.current = kind;
     };
 
     const target = tour[s.wp];
     if (s.mode === "view") {
-      setAnim("Idle");
+      setAnim("idle");
       s.timer -= delta;
       s.yaw = dampAngle(s.yaw, target.viewYaw ?? s.yaw, 8, delta);
       if (s.timer <= 0) {
@@ -880,7 +956,7 @@ function RoamingVisitor({
         s.wp = (s.wp + 1) % tour.length;
       }
     } else {
-      setAnim("Walk");
+      setAnim("walk");
       const dx = target.x - person.current.position.x;
       const dz = target.z - person.current.position.z;
       const dist = Math.hypot(dx, dz);
@@ -898,17 +974,16 @@ function RoamingVisitor({
         s.yaw = dampAngle(s.yaw, Math.atan2(-dx, -dz), 10, delta);
       }
     }
-    person.current.rotation.y = s.yaw;
+    person.current.rotation.y = s.yaw + yawOffset;
   });
 
   return (
     <group
       ref={person}
       position={[-3, 0, room.startZ - 2.2]}
-      rotation={[0, Math.PI / 2, 0]}
-      scale={scale}
+      rotation={[0, Math.PI / 2 + yawOffset, 0]}
     >
-      {gltf && <primitive object={gltf.scene} />}
+      {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
     </group>
   );
 }
@@ -927,22 +1002,21 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
       <Visitor
         position={[-6.7, 0, firstPaintingZ]}
         rotationY={-Math.PI / 2}
-        tint={visitorTints[index]}
-        scale={0.98 + (index % 3) * 0.03}
+        modelIndex={index}
+        seed={index * 211 + 3}
       />
       <Visitor
         position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
-        tint={visitorTints[(index + 2) % visitorTints.length]}
-        scale={0.96 + ((index + 1) % 3) * 0.04}
+        modelIndex={index + 2}
+        seed={index * 211 + 104}
       />
 
       {/* Visitante percorrendo a sala como em um museu real */}
       <RoamingVisitor
         room={room}
+        modelIndex={index + 4}
         seed={index * 97 + 13}
-        tint={visitorTints[(index + 1) % visitorTints.length]}
-        scale={1 + (index % 2) * 0.04}
       />
     </Suspense>
   </group>;
@@ -1348,8 +1422,10 @@ function PlazaDetails() {
 
     {/* Mobiliário e pessoas na praça */}
     <MuseumBench position={[14.5, 0, 20.5]} rotationY={Math.PI / 2} />
-    <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} tint="#315a69" scale={1.02} />
-    <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} tint="#7d3941" scale={0.97} />
+    <Suspense fallback={null}>
+      <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} modelIndex={1} seed={901} />
+      <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} modelIndex={6} seed={1204} />
+    </Suspense>
   </group>;
 }
 
