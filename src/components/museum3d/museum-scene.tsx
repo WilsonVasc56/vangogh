@@ -686,6 +686,7 @@ interface VisitorModelConfig {
 
 const VISITOR_MODELS: VisitorModelConfig[] = [
   { id: "chibi-woman", url: "/models/chibi-woman.glb", idle: ["Idle_12"], walk: ["Walking"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "pixar", url: "/models/pixar.glb", idle: ["Armature|Idle_3|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
 ];
 
 // Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
@@ -1002,7 +1003,7 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
       <Visitor
         position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
-        modelIndex={index + 2}
+        modelIndex={index + 1}
         seed={index * 211 + 104}
       />
 
