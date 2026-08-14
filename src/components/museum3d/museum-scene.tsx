@@ -690,6 +690,7 @@ const VISITOR_MODELS: VisitorModelConfig[] = [
   { id: "elderly", url: "/models/elderly.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
   { id: "elderly-woman", url: "/models/elderly-woman.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
   { id: "teen", url: "/models/teen.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "girl", url: "/models/girl.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
 ];
 
 // Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
