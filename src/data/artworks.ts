@@ -13,6 +13,8 @@ export interface Artwork {
   /** Dimensões reais da tela (fase 2). Quando ausentes, o museu usa o aspecto do JPEG. */
   larguraCm?: number;
   alturaCm?: number;
+  /** Técnica/material (ex.: "Óleo sobre tela"). Preenchido nas obras destacadas do livro. */
+  tecnica?: string;
 }
 
 interface ArtworkMeta {
@@ -25,6 +27,7 @@ interface ArtworkMeta {
   descricao: string;
   larguraCm?: number;
   alturaCm?: number;
+  tecnica?: string;
 }
 
 // Conteúdo curado e parafraseado a partir dos artigos da Wikipedia (CC BY-SA).
@@ -39,6 +42,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Considerada a primeira obra-prima de Van Gogh, retrata uma família de camponeses ceando à luz de lamparina. O artista buscou tons de 'batata podre' e rostos grosseiros para expressar a vida dura do campo, rejeitando o academicismo polido.",
+    larguraCm: 114,
+    alturaCm: 82,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "natureza-morta-com-biblia",
@@ -49,6 +55,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Pintada logo após a morte do pai, pastor protestante, mostra a grande Bíblia da família ao lado de um romance de Zola. A tela é lida como um diálogo silencioso entre a fé do pai e a visão moderna do filho.",
+    larguraCm: 78,
+    alturaCm: 65,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "jardim-da-paroquia-em-nuenen",
@@ -90,6 +99,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Botas gastas compradas em um mercado de pulgas, pintadas com pinceladas densas. A obra inspirou célebres interpretações filosóficas de Heidegger sobre a vida do trabalhador contida nos objetos.",
+    larguraCm: 45.5,
+    alturaCm: 37.5,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "retrato-de-pere-tanguy",
@@ -100,6 +112,9 @@ const meta: ArtworkMeta[] = [
     museu: "Musée Rodin, Paris",
     descricao:
       "Julien Tanguy, o 'Père Tanguy', era um vendedor de tintas que apoiava jovens artistas. Ao fundo, estampas japonesas de Hiroshige revelam a paixão de Van Gogh pela arte do Japão nesta fase.",
+    larguraCm: 75,
+    alturaCm: 92,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "agostina-segatori",
@@ -120,6 +135,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Cópia livre de uma gravura de Hiroshige, com moldura decorada por kanji. Van Gogh acreditava que o Japão era uma utopia de luz e cor, e usava as estampas para treinar o olhar para a Provença.",
+    larguraCm: 46,
+    alturaCm: 55,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "moulin-de-la-galette",
@@ -140,6 +158,9 @@ const meta: ArtworkMeta[] = [
     museu: "Metropolitan Museum of Art, Nova York",
     descricao:
       "Um dos muitos autorretratos feitos em Paris por falta de dinheiro para modelos. As pinceladas curtas e radiantes, em azul e ocre, mostram a influência do pontilhismo de Seurat e Signac.",
+    larguraCm: 31.8,
+    alturaCm: 40.6,
+    tecnica: "Óleo sobre tela",
   },
   // ---------- ARLES (1888–1889) ----------
   {
@@ -151,6 +172,9 @@ const meta: ArtworkMeta[] = [
     museu: "National Gallery, Londres (entre outras versões)",
     descricao:
       "Série de naturezas-mortas feitas para decorar o quarto de Gauguin na Casa Amarela. Van Gogh explorou todas as gamas do amarelo sobre amarelo, transformando flores murchas em símbolo de gratidão e amizade.",
+    larguraCm: 73,
+    alturaCm: 92.1,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "quarto-em-arles",
@@ -161,6 +185,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Seu próprio quarto na Casa Amarela, pintado com perspectiva deliberadamente distorcida para transmitir repouso absoluto. As cores planas e vivas refletem a influência das estampas japonesas.",
+    larguraCm: 90,
+    alturaCm: 72,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "o-cafe-noturno",
@@ -171,6 +198,9 @@ const meta: ArtworkMeta[] = [
     museu: "Yale University Art Gallery, New Haven",
     descricao:
       "Van Gogh descreveu este café como um lugar 'onde se pode arruinar-se, enlouquecer ou cometer um crime'. Os vermelhos e verdes violentos em choque traduzem a atmosfera opressiva da noite.",
+    larguraCm: 89,
+    alturaCm: 70,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "terraço-do-cafe-a-noite",
@@ -181,6 +211,9 @@ const meta: ArtworkMeta[] = [
     museu: "Kröller-Müller Museum, Otterlo",
     descricao:
       "Primeiro céu estrelado de Van Gogh: um terraço iluminado a gás na Place du Forum, em Arles. A tela combina o amarelo quente da luz artificial com o azul profundo da noite — sem usar preto.",
+    larguraCm: 65.3,
+    alturaCm: 80.7,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "noite-estrelada-sobre-o-rodano",
@@ -191,6 +224,9 @@ const meta: ArtworkMeta[] = [
     museu: "Musée d'Orsay, Paris",
     descricao:
       "As constelações refletem-se nas águas do rio Ródano sob as luzes de gás de Arles. Pintado à beira do rio, é o ensaio direto para a grande Noite Estrelada do ano seguinte.",
+    larguraCm: 92,
+    alturaCm: 72.5,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "a-casa-amarela",
@@ -201,6 +237,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "A casa na Place Lamartine que Van Gogh alugou e sonhou transformar no 'Ateliê do Sul', uma comunidade de artistas. Viveu ali seus meses mais produtivos — e também a crise com Gauguin.",
+    larguraCm: 91.5,
+    alturaCm: 72,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "o-vinhedo-vermelho",
@@ -211,6 +250,9 @@ const meta: ArtworkMeta[] = [
     museu: "Museu Pushkin, Moscou",
     descricao:
       "A única tela que Van Gogh vendeu em vida, comprada pela pintora Anna Boch por 400 francos. Retrata colhedores de uva ao pôr do sol, com o vinhedo tingido de vermelho e dourado.",
+    larguraCm: 93,
+    alturaCm: 75,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "a-ponte-de-langlois",
@@ -231,6 +273,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Vista panorâmica da planície de La Crau no verão, com carroças e ceifeiros minúsculos. O próprio artista considerava-a uma de suas telas mais bem-sucedidas pelo equilíbrio entre cor e trabalho rural.",
+    larguraCm: 91.8,
+    alturaCm: 73.4,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "lembranca-do-jardim-de-etten",
@@ -261,6 +306,9 @@ const meta: ArtworkMeta[] = [
     museu: "Museum of Fine Arts, Boston (entre outras versões)",
     descricao:
       "Retrato de Augustine Roulin, esposa do carteiro amigo, segurando o cordão de um berço invisível. Van Gogh via nela uma 'consoladora' universal e repetiu o tema em cinco versões.",
+    larguraCm: 73.7,
+    alturaCm: 92.7,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "autorretrato-com-orelha-enfaixada",
@@ -271,6 +319,9 @@ const meta: ArtworkMeta[] = [
     museu: "Courtauld Gallery, Londres",
     descricao:
       "Pintado semanas após o episódio em que cortou parte da própria orelha durante a crise com Gauguin. O casaco pesado e a estampa japonesa ao fundo mostram o artista tentando retomar o trabalho.",
+    larguraCm: 49,
+    alturaCm: 60,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "o-zouave",
@@ -332,6 +383,9 @@ const meta: ArtworkMeta[] = [
     museu: "MoMA, Nova York",
     descricao:
       "A obra mais famosa de Van Gogh: a vista noturna da janela do asilo de Saint-Rémy, reinventada de memória. O céu turbilhona em vórtices sobre um cipreste em chamas e uma vila imaginária com torre de igreja holandesa.",
+    larguraCm: 92.1,
+    alturaCm: 73.7,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "iris",
@@ -342,6 +396,9 @@ const meta: ArtworkMeta[] = [
     museu: "J. Paul Getty Museum, Los Angeles",
     descricao:
       "Pintada no jardim do asilo na primeira semana de internação. As íris violetas dançam sobre o fundo vermelho-terra; uma única flor branca destaca-se, talvez autorretrato do artista entre os demais.",
+    larguraCm: 93,
+    alturaCm: 71,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "campo-de-trigo-com-ciprestes",
@@ -352,6 +409,9 @@ const meta: ArtworkMeta[] = [
     museu: "National Gallery, Londres",
     descricao:
       "Os ciprestes escuros como chamas verdes tornaram-se obsessão de Van Gogh em Saint-Rémy: 'belos como um obelisco egípcio'. O vento percorre o trigo e as nuvens em espirais contínuas.",
+    larguraCm: 90.9,
+    alturaCm: 72.1,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "amendoeira-em-flor",
@@ -362,6 +422,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Presente para o sobrinho recém-nascido, batizado Vincent em sua homenagem. Galhos de amendoeira contra o céu turquesa, com contornos de gravura japonesa — símbolo de vida nova em pleno inverno.",
+    larguraCm: 92.4,
+    alturaCm: 73.3,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "a-porta-da-eternidade",
@@ -372,6 +435,9 @@ const meta: ArtworkMeta[] = [
     museu: "Kröller-Müller Museum, Otterlo",
     descricao:
       "Um velho sentado, o rosto enterrado nas mãos — talvez a imagem mais crua da angústia de Van Gogh. Baseada numa litografia que ele mesmo fizera anos antes, ganhou cores intensas na versão em óleo.",
+    larguraCm: 64,
+    alturaCm: 80,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "oliveiras",
@@ -392,6 +458,9 @@ const meta: ArtworkMeta[] = [
     museu: "Musée d'Orsay, Paris",
     descricao:
       "Seu último grande autorretrato: o rosto imóvel e determinado emerge de um fundo de arabescos azuis em redemoinho. Possivelmente o quadro que levou a Theo como prova de recuperação.",
+    larguraCm: 54,
+    alturaCm: 65,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "a-ronda-dos-prisioneiros",
@@ -433,6 +502,9 @@ const meta: ArtworkMeta[] = [
     museu: "Coleção particular (Musée d'Orsay guarda a 2ª versão)",
     descricao:
       "O médico homeopata e pintor amador que cuidou de Van Gogh nos últimos meses. A pose melancólica e a dedaleira (digitalis) sobre a mesa resumem o 'rosto quebrantado do nosso tempo', nas palavras do artista.",
+    larguraCm: 56,
+    alturaCm: 67,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "a-igreja-de-auvers",
@@ -443,6 +515,9 @@ const meta: ArtworkMeta[] = [
     museu: "Musée d'Orsay, Paris",
     descricao:
       "A igreja gótica da vila vista sob um céu cobalto profundo, com caminhos que divergem no primeiro plano. A arquitetura ondula como se viva, entre o sol e a sombra.",
+    larguraCm: 74,
+    alturaCm: 94,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "campo-de-trigo-com-corvos",
@@ -453,6 +528,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Longamente lida como tela de despedida: três caminhos que não levam a lugar algum, corvos negros sobre o trigo dourado e um céu de tempestade. Escreveu a Theo sobre a 'tristeza e a solidão extrema' desses campos.",
+    larguraCm: 103,
+    alturaCm: 50.5,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "raizes-de-arvore",
@@ -463,6 +541,9 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Considerada sua última pintura, deixada inacabada no dia em que se feriu mortalmente. Troncos e raízes entrelaçados em verde e ocre ocupam toda a tela — uma luta abstrata da vida contra a terra.",
+    larguraCm: 100,
+    alturaCm: 50,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "o-jardim-de-daubigny",
@@ -523,6 +604,9 @@ const meta: ArtworkMeta[] = [
     museu: "Cleveland Museum of Art (entre outras versões)",
     descricao:
       "A filha adolescente do dono da pensão onde Van Gogh morava em Auvers. Pintada em azul e verde com o olhar sereno, é um dos últimos retratos do artista e um registro da vida cotidiana da vila.",
+    larguraCm: 56.5,
+    alturaCm: 67.3,
+    tecnica: "Óleo sobre tela",
   },
   {
     slug: "ramos-de-castanheiro-em-flor",

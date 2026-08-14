@@ -3,11 +3,14 @@ import Link from "next/link";
 export function Header() {
   return (
     <header className="fixed top-0 z-50 w-full border-b border-white/10 bg-[#0b1020]/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="font-serif text-lg tracking-wide text-amber-100">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        <Link
+          href="/"
+          className="shrink-0 font-serif text-base tracking-wide text-amber-100 sm:text-lg"
+        >
           Museu <span className="italic text-amber-400">Van Gogh</span>
         </Link>
-        <nav className="flex items-center gap-6 text-sm text-amber-100/70">
+        <nav className="flex items-center gap-3 text-xs text-amber-100/70 sm:gap-6 sm:text-sm">
           <Link href="/" className="transition-colors hover:text-amber-300">
             Entrada
           </Link>
@@ -16,6 +19,9 @@ export function Header() {
           </Link>
           <Link href="/museu" className="transition-colors hover:text-amber-300">
             Museu 3D
+          </Link>
+          <Link href="/livro" className="transition-colors hover:text-amber-300">
+            Livro
           </Link>
           <Link href="/biografia" className="transition-colors hover:text-amber-300">
             Biografia
