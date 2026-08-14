@@ -62,7 +62,11 @@ export function MuseumExperience() {
         shadows
       >
         <MuseumScene
-          active={isMobile || locked}
+          active={
+            isMobile ||
+            locked ||
+            (typeof window !== "undefined" && window.location.hash === "#debug-walk")
+          }
           isMobile={isMobile}
           mobileInput={mobileInput}
           interactionToken={interactionToken}

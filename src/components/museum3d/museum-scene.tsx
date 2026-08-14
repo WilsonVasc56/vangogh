@@ -1,6 +1,6 @@
 "use client";
 
-import { Environment, Html, Lightformer, Sky, useAnimations, useTexture } from "@react-three/drei";
+import { Environment, Html, Lightformer, Sky, useAnimations } from "@react-three/drei";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -14,6 +14,7 @@ import {
 import * as THREE from "three";
 import { artworks, type Artwork } from "@/data/artworks";
 import { periods, type PeriodId } from "@/data/periods";
+import { GalleryArtwork, type ArtworkSlot } from "./gallery-artwork";
 
 interface MuseumSceneProps {
   active: boolean;
@@ -32,6 +33,11 @@ export interface MobileInput {
   lookY: number;
 }
 
+// Ferramenta de QA: abrir /museu#debug-walk permite caminhar sem pointer lock
+// (útil em ambientes headless/automação, onde o navegador bloqueia o lock).
+const debugFreeRoam =
+  typeof window !== "undefined" && window.location.hash === "#debug-walk";
+
 interface RoomConfig {
   id: PeriodId;
   name: string;
@@ -46,18 +52,16 @@ interface RoomConfig {
   items: Artwork[];
 }
 
-interface ArtworkSlot {
-  artwork: Artwork;
-  position: [number, number, number];
-  rotation: [number, number, number];
-}
-
 const ENTRANCE_DOOR_Z = 14.8;
 const BUILDING_PORTAL_Z = 8.55;
 const FIRST_ROOM_Z = -1.5;
 const ROOM_HALF_WIDTH = 8.5;
 const ROOM_HEIGHT = 6.5;
 const DOOR_HALF_WIDTH = 1.65;
+const BACK_WALL_OUTER_MARGIN = ROOM_HALF_WIDTH * 0.12;
+const BACK_WALL_DOOR_MARGIN = ROOM_HALF_WIDTH * 0.09;
+const BACK_WALL_ARTWORK_PITCH = 2.4;
+const BACK_WALL_ARTWORK_OFFSET = 0.27;
 
 const roomStyles = [
   { wallColor: "#756b5d", floorColor: "#332c28", accent: "#b39772" },
@@ -98,22 +102,76 @@ function createRooms(): RoomConfig[] {
 const rooms = createRooms();
 const internalDoorBoundaries = rooms.slice(0, -1).map((room) => room.endZ);
 
+interface WallSegment {
+  startX: number;
+  endX: number;
+}
+
+function distributeArtworkPositions(segment: WallSegment) {
+  const width = segment.endX - segment.startX;
+  const count = Math.max(1, Math.floor(width / BACK_WALL_ARTWORK_PITCH));
+  const spacing = width / count;
+  return Array.from(
+    { length: count },
+    (_, index) => segment.startX + spacing * (index + 0.5),
+  );
+}
+
+function createBackWallPositions(last: boolean) {
+  const outerLeft = -ROOM_HALF_WIDTH + BACK_WALL_OUTER_MARGIN;
+  const outerRight = ROOM_HALF_WIDTH - BACK_WALL_OUTER_MARGIN;
+  const segments: WallSegment[] = last
+    ? [{ startX: outerLeft, endX: outerRight }]
+    : [
+        {
+          startX: outerLeft,
+          endX: -DOOR_HALF_WIDTH - BACK_WALL_DOOR_MARGIN,
+        },
+        {
+          startX: DOOR_HALF_WIDTH + BACK_WALL_DOOR_MARGIN,
+          endX: outerRight,
+        },
+      ];
+
+  return segments.flatMap(distributeArtworkPositions);
+}
+
+function getSideArtworkCount(room: RoomConfig) {
+  const last = room.id === roomOrder.at(-1);
+  return Math.max(0, room.items.length - createBackWallPositions(last).length);
+}
+
 function createArtworkSlots(): ArtworkSlot[] {
-  return rooms.flatMap((room) =>
-    room.items.map((artwork, index) => {
+  return rooms.flatMap((room) => {
+    const last = room.id === roomOrder.at(-1);
+    const backWallPositions = createBackWallPositions(last);
+    const sideArtworkCount = getSideArtworkCount(room);
+    const sideSlots = room.items.slice(0, sideArtworkCount).map((artwork, index) => {
       const leftWall = index % 2 === 0;
       const row = Math.floor(index / 2);
       return {
         artwork,
+        // Origem no piso; o componente pendura a tela na linha de olhar (1,55 m).
         position: [
           leftWall ? -ROOM_HALF_WIDTH + 0.28 : ROOM_HALF_WIDTH - 0.28,
-          1.23,
+          0,
           room.startZ - 2.7 - row * 2.25,
         ],
         rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
       } as ArtworkSlot;
-    }),
-  );
+    });
+    const backSlots = room.items.slice(sideArtworkCount).map((artwork, index) => ({
+      artwork,
+      position: [
+        backWallPositions[index],
+        0,
+        room.endZ + BACK_WALL_ARTWORK_OFFSET,
+      ],
+      rotation: [0, 0, 0],
+    }) satisfies ArtworkSlot);
+
+    return [...sideSlots, ...backSlots];
+  });
 }
 
 const artworkSlots = createArtworkSlots();
@@ -375,6 +433,11 @@ function GalleryControls({
         if (artwork) onArtworkSelect(artwork);
       }
     }
+    if (debugFreeRoam && document.pointerLockElement !== gl.domElement) {
+      // Olhar sem pointer lock em automação/QA.
+      if (keys.current.has("KeyQ")) yaw.current += delta * 1.8;
+      if (keys.current.has("KeyE")) yaw.current -= delta * 1.8;
+    }
     camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
 
     internalDoorBoundaries.forEach((boundary, index) => {
@@ -392,7 +455,7 @@ function GalleryControls({
       onRoomChange(nextRoom);
     }
 
-    if (!active || (!isMobile && document.pointerLockElement !== gl.domElement)) return;
+    if (!active || (!isMobile && !debugFreeRoam && document.pointerLockElement !== gl.domElement)) return;
 
     const forward = new THREE.Vector2(-Math.sin(yaw.current), -Math.cos(yaw.current));
     const strafe = new THREE.Vector2(Math.cos(yaw.current), -Math.sin(yaw.current));
@@ -657,87 +720,166 @@ function MuseumBench({
   </group>;
 }
 
-const VISITOR_MODEL = "/models/visitor.glb";
-// O rig do modelo olha para -Z; compensa 180° para alinhar frente/movimento.
-const VISITOR_FORWARD_OFFSET = Math.PI;
+/* ---------------------------------------------------------------------- */
+/* Modelos humanos: registry de GLBs + aparência determinística           */
+/* ---------------------------------------------------------------------- */
 
-// Humanos 3D com esqueleto animado (caminhar/parado). Cada visitante carrega a
-// própria instância do GLB: clonar SkinnedMesh quebra o rig e torna o modelo
-// invisível, então o arquivo (em cache HTTP) é parseado por instância.
-function Visitor({
-  position,
-  rotationY = 0,
-  tint = "#ffffff",
-  walkingRange = 0,
-  phase = 0,
-  scale = 1,
-}: {
-  position: [number, number, number];
-  rotationY?: number;
-  tint?: string;
-  walkingRange?: number;
-  phase?: number;
-  scale?: number;
-}) {
-  const [gltf, setGltf] = useState<GLTF | null>(null);
-  const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(gltf?.animations ?? [], person);
-  const elapsed = useRef(phase);
+interface VisitorModelConfig {
+  id: string;
+  url: string;
+  /** Clips candidatos, na ordem de preferência (cada GLB nomeia diferente). */
+  idle: string[];
+  walk: string[];
+  walkTimeScale: number;
+  /** Materiais que recebem tint; null = textura original, sem recolorir. */
+  tintPattern: RegExp | null;
+  /**
+   * Quanto somar a um yaw expresso na convenção "frente +Z" para alinhar o
+   * rig. visitor.glb (Mixamo/Soldier) olha para -Z e precisa de 180°;
+   * os KayKit seguem o padrão glTF (frente +Z) e não precisam de ajuste.
+   */
+  forwardOffset: number;
+}
+
+const VISITOR_MODELS: VisitorModelConfig[] = [
+  { id: "chibi-woman", url: "/models/chibi-woman.glb", idle: ["Idle_12"], walk: ["Walking"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "pixar", url: "/models/pixar.glb", idle: ["Armature|Idle_3|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "elderly", url: "/models/elderly.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "elderly-woman", url: "/models/elderly-woman.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "teen", url: "/models/teen.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "girl", url: "/models/girl.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+];
+
+// Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
+// já trazem texturas próprias e não são recoloridos).
+const visitorTints = [
+  "#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f",
+  "#274156", "#7a4a5e", "#4f6134", "#845c2c",
+];
+
+interface VisitorAppearance {
+  model: VisitorModelConfig;
+  tint: string | null;
+  height: number;
+}
+
+// Aparência determinística: o modelo é atribuído por slot (garantindo modelos
+// distintos dentro de cada sala) e a seed varia cor (quando tingível) e altura,
+// para que nenhum dos visitantes pareça clone de outro.
+function resolveVisitorAppearance(
+  modelIndex: number,
+  seed: number,
+): VisitorAppearance {
+  const rand = mulberry32(seed);
+  const model = VISITOR_MODELS[modelIndex % VISITOR_MODELS.length];
+  const tint = model.tintPattern
+    ? visitorTints[Math.floor(rand() * visitorTints.length)]
+    : null;
+  const height = 1.62 + rand() * 0.28;
+  return { model, tint, height };
+}
+
+function resolveClip(
+  actions: Record<string, THREE.AnimationAction | null>,
+  candidates: string[],
+) {
+  for (const name of candidates) {
+    const action = actions[name];
+    if (action) return action;
+  }
+  return null;
+}
+
+interface LoadedVisitorModel {
+  gltf: GLTF;
+  /** Escala que normaliza a altura nativa do GLB para a altura desejada. */
+  scale: number;
+}
+
+// Carrega o GLB do modelo, aplica sombras/tint e mede a altura nativa para
+// normalizar personagens de fontes diferentes (Mixamo, KayKit, Xbot).
+// Cada visitante carrega a própria instância: clonar SkinnedMesh quebra o
+// rig e torna o modelo invisível, então o arquivo (em cache HTTP) é parseado
+// por instância.
+function useVisitorModel(
+  config: VisitorModelConfig,
+  tint: string | null,
+  height: number,
+): LoadedVisitorModel | null {
+  const [loaded, setLoaded] = useState<LoadedVisitorModel | null>(null);
 
   useEffect(() => {
     let alive = true;
     new GLTFLoader().load(
-      VISITOR_MODEL,
-      (loaded) => {
+      config.url,
+      (gltf) => {
         if (!alive) return;
-        loaded.scene.traverse((object) => {
+        gltf.scene.traverse((object) => {
           const mesh = object as THREE.Mesh;
           if (!mesh.isMesh) return;
           mesh.castShadow = true;
+          if (!config.tintPattern || !tint) return;
           (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
             (material) => {
-              if (/body/i.test(material.name)) {
+              if (config.tintPattern!.test(material.name)) {
                 (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
               }
             },
           );
         });
-        setGltf(loaded);
+        const size = new THREE.Box3()
+          .setFromObject(gltf.scene)
+          .getSize(new THREE.Vector3());
+        const scale = size.y > 0.01 ? height / size.y : 1;
+        setLoaded({ gltf, scale });
       },
       undefined,
-      () => setGltf(null),
+      () => {
+        if (alive) setLoaded(null);
+      },
     );
     return () => {
       alive = false;
     };
-  }, [tint]);
+  }, [config, tint, height]);
+
+  return loaded;
+}
+
+// Humano parado diante de uma obra (animação Idle), com aparência única
+// derivada da seed.
+function Visitor({
+  position,
+  rotationY = 0,
+  modelIndex,
+  seed,
+}: {
+  position: [number, number, number];
+  rotationY?: number;
+  modelIndex: number;
+  seed: number;
+}) {
+  const appearance = useMemo(
+    () => resolveVisitorAppearance(modelIndex, seed),
+    [modelIndex, seed],
+  );
+  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
+  const person = useRef<THREE.Group>(null);
+  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
 
   useEffect(() => {
-    const action = walkingRange ? actions.Walk : actions.Idle;
+    const action = resolveClip(actions, appearance.model.idle);
     if (!action) return;
-    action.timeScale = walkingRange ? 0.72 : 1;
     action.reset().play();
     return () => {
       action.stop();
     };
-  }, [actions, walkingRange]);
+  }, [actions, appearance]);
 
-  useFrame((_, delta) => {
-    if (!walkingRange || !person.current) return;
-    elapsed.current += delta * 0.55;
-    const wave = Math.sin(elapsed.current);
-    person.current.position.z = position[2] + wave * walkingRange;
-    person.current.rotation.y =
-      (Math.cos(elapsed.current) >= 0 ? rotationY : rotationY + Math.PI) +
-      VISITOR_FORWARD_OFFSET;
-  });
-
-  return <group ref={person} position={position} rotation={[0, rotationY + VISITOR_FORWARD_OFFSET, 0]} scale={scale}>
-    {gltf && <primitive object={gltf.scene} />}
+  return <group ref={person} position={position} rotation={[0, rotationY + appearance.model.forwardOffset, 0]}>
+    {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
   </group>;
 }
-
-const visitorTints = ["#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f"];
 
 /* ---------------------------------------------------------------------- */
 /* Visitante que percorre a sala como em um museu real                     */
@@ -773,8 +915,9 @@ interface Waypoint {
 // e retorna pela extremidade da entrada — sempre em loop.
 function buildTour(room: RoomConfig, seed: number): Waypoint[] {
   const rand = mulberry32(seed);
-  const leftRows = Math.ceil(room.items.length / 2);
-  const rightRows = Math.floor(room.items.length / 2);
+  const sideArtworkCount = getSideArtworkCount(room);
+  const leftRows = Math.ceil(sideArtworkCount / 2);
+  const rightRows = Math.floor(sideArtworkCount / 2);
   const rowZ = (row: number) => room.startZ - 2.7 - row * 2.25;
   const crossFar = room.endZ + 2.2;
   const crossNear = room.startZ - 2.2;
@@ -810,19 +953,24 @@ function buildTour(room: RoomConfig, seed: number): Waypoint[] {
 
 function RoamingVisitor({
   room,
+  modelIndex,
   seed,
-  tint = "#ffffff",
-  scale = 1,
 }: {
   room: RoomConfig;
+  modelIndex: number;
   seed: number;
-  tint?: string;
-  scale?: number;
 }) {
-  const [gltf, setGltf] = useState<GLTF | null>(null);
+  const appearance = useMemo(
+    () => resolveVisitorAppearance(modelIndex, seed * 31 + 7),
+    [modelIndex, seed],
+  );
+  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
   const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(gltf?.animations ?? [], person);
+  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
   const tour = useMemo(() => buildTour(room, seed), [room, seed]);
+  // s.yaw segue a convenção do roteiro (frente -Z); o offset do modelo alinha
+  // rigs que olham para +Z (glTF padrão) ou -Z (Mixamo).
+  const yawOffset = appearance.model.forwardOffset - Math.PI;
   const state = useRef({
     wp: 0,
     mode: "walk" as "walk" | "view",
@@ -830,53 +978,34 @@ function RoamingVisitor({
     yaw: Math.PI / 2,
     speed: 1 + mulberry32(seed)() * 0.5,
   });
-  const currentAnim = useRef<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    new GLTFLoader().load(
-      VISITOR_MODEL,
-      (loaded) => {
-        if (!alive) return;
-        loaded.scene.traverse((object) => {
-          const mesh = object as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.castShadow = true;
-          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
-            (material) => {
-              if (/body/i.test(material.name)) {
-                (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
-              }
-            },
-          );
-        });
-        setGltf(loaded);
-      },
-      undefined,
-      () => setGltf(null),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [tint]);
+  const currentAnim = useRef<"walk" | "idle" | null>(null);
 
   useFrame((_, delta) => {
     if (!person.current || tour.length === 0) return;
     const s = state.current;
 
-    const setAnim = (name: "Walk" | "Idle") => {
-      if (currentAnim.current === name) return;
-      const next = actions[name];
+    const setAnim = (kind: "walk" | "idle") => {
+      if (currentAnim.current === kind) return;
+      const next = resolveClip(
+        actions,
+        kind === "walk" ? appearance.model.walk : appearance.model.idle,
+      );
       if (!next) return;
-      const previous = currentAnim.current ? actions[currentAnim.current] : null;
+      const previous = resolveClip(
+        actions,
+        currentAnim.current === "walk"
+          ? appearance.model.walk
+          : appearance.model.idle,
+      );
+      next.timeScale = kind === "walk" ? appearance.model.walkTimeScale : 1;
       next.reset().fadeIn(0.3).play();
       previous?.fadeOut(0.3);
-      currentAnim.current = name;
+      currentAnim.current = kind;
     };
 
     const target = tour[s.wp];
     if (s.mode === "view") {
-      setAnim("Idle");
+      setAnim("idle");
       s.timer -= delta;
       s.yaw = dampAngle(s.yaw, target.viewYaw ?? s.yaw, 8, delta);
       if (s.timer <= 0) {
@@ -884,7 +1013,7 @@ function RoamingVisitor({
         s.wp = (s.wp + 1) % tour.length;
       }
     } else {
-      setAnim("Walk");
+      setAnim("walk");
       const dx = target.x - person.current.position.x;
       const dz = target.z - person.current.position.z;
       const dist = Math.hypot(dx, dz);
@@ -902,17 +1031,16 @@ function RoamingVisitor({
         s.yaw = dampAngle(s.yaw, Math.atan2(-dx, -dz), 10, delta);
       }
     }
-    person.current.rotation.y = s.yaw;
+    person.current.rotation.y = s.yaw + yawOffset;
   });
 
   return (
     <group
       ref={person}
       position={[-3, 0, room.startZ - 2.2]}
-      rotation={[0, Math.PI / 2, 0]}
-      scale={scale}
+      rotation={[0, Math.PI / 2 + yawOffset, 0]}
     >
-      {gltf && <primitive object={gltf.scene} />}
+      {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
     </group>
   );
 }
@@ -931,45 +1059,83 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
       <Visitor
         position={[-6.7, 0, firstPaintingZ]}
         rotationY={-Math.PI / 2}
-        tint={visitorTints[index]}
-        scale={0.98 + (index % 3) * 0.03}
+        modelIndex={index}
+        seed={index * 211 + 3}
       />
       <Visitor
         position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
-        tint={visitorTints[(index + 2) % visitorTints.length]}
-        scale={0.96 + ((index + 1) % 3) * 0.04}
+        modelIndex={index + 3}
+        seed={index * 211 + 104}
       />
 
       {/* Visitante percorrendo a sala como em um museu real */}
       <RoamingVisitor
         room={room}
+        modelIndex={index + 4}
         seed={index * 97 + 13}
-        tint={visitorTints[(index + 1) % visitorTints.length]}
-        scale={1 + (index % 2) * 0.04}
       />
     </Suspense>
   </group>;
 }
 
-function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: number }) {
+function Room({
+  room,
+  last,
+  index,
+  isMobile,
+}: {
+  room: RoomConfig;
+  last: boolean;
+  index: number;
+  isMobile: boolean;
+}) {
+  const floorTexture = roomFloorTextures[index];
+  const wallTexture = roomWallTextures[index];
+  const endWallTexture = roomEndWallTextures[index];
+  const wallMaterial = (texture: THREE.Texture | null) => (
+    <meshStandardMaterial
+      color={texture ? "#ffffff" : room.wallColor}
+      map={texture ?? undefined}
+      roughness={0.92}
+    />
+  );
+
   return <group>
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, room.centerZ]} receiveShadow>
       <planeGeometry args={[ROOM_HALF_WIDTH * 2, room.length]} />
-      <meshStandardMaterial color={room.floorColor} roughness={0.78} />
+      <meshStandardMaterial
+        color={floorTexture ? "#ffffff" : room.floorColor}
+        map={floorTexture ?? undefined}
+        roughness={0.66}
+      />
     </mesh>
     <mesh position={[-ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+      {wallMaterial(wallTexture)}
     </mesh>
     <mesh position={[ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+      {wallMaterial(wallTexture)}
     </mesh>
     <mesh position={[0, ROOM_HEIGHT, room.centerZ]}>
       <boxGeometry args={[ROOM_HALF_WIDTH * 2, 0.22, room.length]} />
       <meshStandardMaterial color="#313b49" roughness={0.72} />
     </mesh>
+
+    {/* Rodapé e friso de pendurar quadros, como em galerias reais */}
+    {[-1, 1].map((side) => (
+      <group key={side}>
+        <mesh position={[side * (ROOM_HALF_WIDTH - 0.16), 0.06, room.centerZ]}>
+          <boxGeometry args={[0.04, 0.12, room.length]} />
+          <meshStandardMaterial color={shade(room.wallColor, 0.55)} roughness={0.6} />
+        </mesh>
+        <mesh position={[side * (ROOM_HALF_WIDTH - 0.165), 3.12, room.centerZ]}>
+          <boxGeometry args={[0.03, 0.07, room.length]} />
+          <meshStandardMaterial color={shade(room.wallColor, 1.18)} roughness={0.7} />
+        </mesh>
+      </group>
+    ))}
 
     {/* Faixa de identificação visual do período */}
     <mesh position={[-ROOM_HALF_WIDTH + 0.19, 4.9, room.startZ - 1.7]} rotation={[0, Math.PI / 2, 0]}>
@@ -981,26 +1147,33 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
     {last ? (
       <mesh position={[0, ROOM_HEIGHT / 2, room.endZ]}>
         <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, 0.28]} />
-        <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+        {wallMaterial(endWallTexture)}
       </mesh>
     ) : (
       <>
         <mesh position={[-(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
         <mesh position={[(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
         <mesh position={[0, 5.25, room.endZ]}>
           <boxGeometry args={[DOOR_HALF_WIDTH * 2, ROOM_HEIGHT - 4, 0.28]} />
-          <meshStandardMaterial color={room.wallColor} roughness={0.9} />
+          {wallMaterial(endWallTexture)}
         </mesh>
       </>
     )}
 
-    <pointLight position={[0, 5.6, room.centerZ]} intensity={46} distance={room.length * 0.8} color="#ffe8bd" />
+    <pointLight position={[0, 5.6, room.centerZ]} intensity={34} distance={room.length * 0.8} color="#ffe8bd" />
+    {/* Luzes quentes rasando as paredes das obras; fora do mobile para poupar fill-rate */}
+    {!isMobile && (
+      <>
+        <pointLight position={[-6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
+        <pointLight position={[6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
+      </>
+    )}
     <mesh position={[0, ROOM_HEIGHT - 0.14, room.centerZ]}>
       <boxGeometry args={[3.2, 0.08, Math.max(4, room.length - 3)]} />
       <meshStandardMaterial color="#fff1ca" emissive="#ffe8b0" emissiveIntensity={1.1} toneMapped={false} />
@@ -1090,9 +1263,72 @@ function drawConcrete(ctx: CanvasRenderingContext2D, size: number) {
   }
 }
 
+// Piso de madeira em tábuas corridas, tingido pela paleta da sala.
+function drawParquet(ctx: CanvasRenderingContext2D, size: number, base: string) {
+  ctx.fillStyle = shade(base, 0.9);
+  ctx.fillRect(0, 0, size, size);
+  const plankLength = size / 3;
+  const plankWidth = size / 16;
+  for (let row = 0; row < 16; row++) {
+    const offset = row % 2 ? plankLength / 2 : 0;
+    for (let col = -1; col < 4; col++) {
+      const factor = 0.92 + ((row * 43 + col * 23) % 12) / 30;
+      ctx.fillStyle = shade(base, factor);
+      ctx.fillRect(col * plankLength + offset + 1, row * plankWidth + 1, plankLength - 2, plankWidth - 2);
+      // Veio discreto ao longo da tábua
+      ctx.fillStyle = shade(base, factor * 0.9);
+      const grainY = row * plankWidth + 3 + ((col * 29 + row * 11) % Math.max(1, plankWidth - 6));
+      ctx.fillRect(col * plankLength + offset + 6, grainY, plankLength - 12, 1.4);
+    }
+  }
+}
+
+// Reboco de parede: ruído fino + manchas amplas de variação de valor.
+function drawPlaster(ctx: CanvasRenderingContext2D, size: number, base: string) {
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 700; i++) {
+    const x = (i * 97) % size;
+    const y = (i * 57) % size;
+    ctx.fillStyle = i % 2 ? "rgba(0,0,0,0.045)" : "rgba(255,255,255,0.05)";
+    ctx.fillRect(x, y, 2, 2);
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = (i * 71) % size;
+    const y = (i * 131) % size;
+    const radius = 18 + ((i * 13) % 26);
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, i % 2 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.045)");
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 const plazaTexture = makeCanvasTexture(drawPavers, 16, 10);
 const yellowBrickTexture = makeCanvasTexture(drawYellowBricks, 3, 3);
 const concreteTexture = makeCanvasTexture(drawConcrete, 5, 2);
+
+// Uma textura de piso e parede por sala (tile de ~1,8 m no piso, ~3 m na parede).
+const roomFloorTextures = rooms.map((room) =>
+  makeCanvasTexture(
+    (ctx, size) => drawParquet(ctx, size, room.floorColor),
+    9.5,
+    Math.max(6, room.length / 1.8),
+  ),
+);
+const roomWallTextures = rooms.map((room) =>
+  makeCanvasTexture(
+    (ctx, size) => drawPlaster(ctx, size, room.wallColor),
+    Math.max(4, room.length / 3),
+    2,
+  ),
+);
+const roomEndWallTextures = rooms.map((room) =>
+  makeCanvasTexture((ctx, size) => drawPlaster(ctx, size, room.wallColor), 6, 2),
+);
 
 function RietveldExterior() {
   return <group position={[-7.2, 0, 6.8]}>
@@ -1243,8 +1479,10 @@ function PlazaDetails() {
 
     {/* Mobiliário e pessoas na praça */}
     <MuseumBench position={[14.5, 0, 20.5]} rotationY={Math.PI / 2} />
-    <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} tint="#315a69" scale={1.02} />
-    <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} tint="#7d3941" scale={0.97} />
+    <Suspense fallback={null}>
+      <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} modelIndex={5} seed={901} />
+      <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} modelIndex={2} seed={1204} />
+    </Suspense>
   </group>;
 }
 
@@ -1280,10 +1518,12 @@ function MuseumArchitecture({
   entranceOpen,
   internalDoorsOpen,
   doorRegistry,
+  isMobile,
 }: {
   entranceOpen: boolean;
   internalDoorsOpen: boolean[];
   doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
+  isMobile: boolean;
 }) {
   return <group>
     <Sky distance={4000} sunPosition={[-35, 42, 25]} turbidity={5} rayleigh={0.35} mieCoefficient={0.005} mieDirectionalG={0.8} />
@@ -1334,7 +1574,9 @@ function MuseumArchitecture({
       </div>
     </Html>
 
-    {rooms.map((room, index) => <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} />)}
+    {rooms.map((room, index) => (
+      <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} isMobile={isMobile} />
+    ))}
     {internalDoorBoundaries.map((z, index) => (
       <SlidingDoors key={z} z={z} open={internalDoorsOpen[index]} />
     ))}
@@ -1344,36 +1586,6 @@ function MuseumArchitecture({
     <StreetLamp />
     <LargeTree />
     <PlazaDetails />
-  </group>;
-}
-
-function LoadedArtwork({
-  slot,
-  registry,
-}: {
-  slot: ArtworkSlot;
-  registry: MutableRefObject<Map<THREE.Object3D, Artwork>>;
-}) {
-  // TextureLoader usa o arquivo estático diretamente. Montar /_next/image
-  // manualmente funciona localmente, mas a Vercel rejeita a URL com 400.
-  const texture = useTexture(slot.artwork.imagem);
-  const image = useRef<THREE.Mesh>(null);
-
-  useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    const mesh = image.current;
-    if (!mesh) return;
-    registry.current.set(mesh, slot.artwork);
-    return () => {
-      registry.current.delete(mesh);
-    };
-  }, [registry, slot.artwork, texture]);
-
-  return <group position={slot.position} rotation={slot.rotation}>
-    <mesh position={[0, 0.68, -0.1]}><boxGeometry args={[1.46, 1.76, 0.12]} /><meshStandardMaterial color="#4c2e13" roughness={0.45} metalness={0.25} /></mesh>
-    <mesh position={[0, 0.68, -0.038]}><planeGeometry args={[1.34, 1.6]} /><meshBasicMaterial color="#d9a749" /></mesh>
-    <mesh ref={image} position={[0, 0.68, -0.03]}><planeGeometry args={[1.24, 1.5]} /><meshBasicMaterial map={texture} toneMapped={false} /></mesh>
   </group>;
 }
 
@@ -1406,6 +1618,7 @@ export function MuseumScene({
       entranceOpen={entranceOpen}
       internalDoorsOpen={stableInternalDoors}
       doorRegistry={doorRegistry}
+      isMobile={isMobile}
     />
     <GalleryControls
       active={active}
@@ -1424,7 +1637,7 @@ export function MuseumScene({
     />
     {artworkSlots.map((slot) => (
       <Suspense fallback={null} key={slot.artwork.slug}>
-        <LoadedArtwork slot={slot} registry={registry} />
+        <GalleryArtwork slot={slot} registry={registry} />
       </Suspense>
     ))}
   </>;
