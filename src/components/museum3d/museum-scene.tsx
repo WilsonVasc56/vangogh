@@ -688,6 +688,7 @@ const VISITOR_MODELS: VisitorModelConfig[] = [
   { id: "chibi-woman", url: "/models/chibi-woman.glb", idle: ["Idle_12"], walk: ["Walking"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
   { id: "pixar", url: "/models/pixar.glb", idle: ["Armature|Idle_3|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
   { id: "elderly", url: "/models/elderly.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "elderly-woman", url: "/models/elderly-woman.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
 ];
 
 // Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
