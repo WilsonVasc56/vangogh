@@ -4,7 +4,6 @@ import { cloneElement, useCallback, useEffect, useMemo, useRef } from "react";
 import HTMLFlipBook from "react-pageflip";
 import type { FlatPage } from "@/data/book";
 import { renderBookPage, type PageRenderContext } from "./book-pages";
-
 /** Assinatura mínima da API do StPageFlip usada pelo viewer. */
 export interface FlipApi {
   flip: (pagina: number) => void;
@@ -34,6 +33,7 @@ export default function FlipBook({
   onPronto,
 }: Props) {
   const bookRef = useRef<{ pageFlip: () => FlipApi } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Identidade estável dos filhos: obrigatória para o react-pageflip.
   const children = useMemo(
@@ -50,12 +50,41 @@ export default function FlipBook({
   );
   const onInit = useCallback(() => {
     onPronto(bookRef.current?.pageFlip() ?? null);
+
+    // No modo retrato, o StPageFlip cria uma cópia temporária da página atual
+    // para simular o verso da folha durante a dobra (newTemporaryCopy). Sem
+    // intervenção, esse verso exibe o MESMO conteúdo da frente — a imagem
+    // aparece duplicada "deslizando" para baixo. Escondemos o conteúdo da
+    // cópia: o verso vira papel em branco, como num livro de folhas
+    // impressas de um lado só.
+    const bloco = wrapperRef.current?.querySelector(".stf__block");
+    if (!bloco) return;
+    const originais = new Set(bloco.querySelectorAll(".stf__item"));
+    const observer = new MutationObserver((mutacoes) => {
+      for (const mutacao of mutacoes) {
+        for (const no of mutacao.addedNodes) {
+          if (
+            no instanceof HTMLElement &&
+            no.classList.contains("stf__item") &&
+            !originais.has(no)
+          ) {
+            for (const filho of Array.from(no.children)) {
+              (filho as HTMLElement).style.visibility = "hidden";
+            }
+          }
+        }
+      }
+    });
+    observer.observe(bloco, { childList: true });
   }, [onPronto]);
 
   useEffect(() => () => onPronto(null), [onPronto]);
 
   return (
-    <div className="h-[min(72vh,700px)] w-full max-w-[1050px]">
+    <div
+      ref={wrapperRef}
+      className="h-[min(72vh,700px)] w-full max-w-[1050px]"
+    >
       <HTMLFlipBook
         ref={bookRef}
         width={500}
