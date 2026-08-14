@@ -1007,14 +1007,14 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
       <Visitor
         position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
-        modelIndex={index + 1}
+        modelIndex={index + 3}
         seed={index * 211 + 104}
       />
 
       {/* Visitante percorrendo a sala como em um museu real */}
       <RoamingVisitor
         room={room}
-        modelIndex={index + 2}
+        modelIndex={index + 4}
         seed={index * 97 + 13}
       />
     </Suspense>
@@ -1422,8 +1422,8 @@ function PlazaDetails() {
     {/* Mobiliário e pessoas na praça */}
     <MuseumBench position={[14.5, 0, 20.5]} rotationY={Math.PI / 2} />
     <Suspense fallback={null}>
-      <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} modelIndex={1} seed={901} />
-      <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} modelIndex={6} seed={1204} />
+      <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} modelIndex={5} seed={901} />
+      <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} modelIndex={2} seed={1204} />
     </Suspense>
   </group>;
 }
