@@ -58,6 +58,10 @@ const FIRST_ROOM_Z = -1.5;
 const ROOM_HALF_WIDTH = 8.5;
 const ROOM_HEIGHT = 6.5;
 const DOOR_HALF_WIDTH = 1.65;
+const BACK_WALL_OUTER_MARGIN = ROOM_HALF_WIDTH * 0.12;
+const BACK_WALL_DOOR_MARGIN = ROOM_HALF_WIDTH * 0.09;
+const BACK_WALL_ARTWORK_PITCH = 2.4;
+const BACK_WALL_ARTWORK_OFFSET = 0.27;
 
 const roomStyles = [
   { wallColor: "#756b5d", floorColor: "#332c28", accent: "#b39772" },
@@ -98,9 +102,51 @@ function createRooms(): RoomConfig[] {
 const rooms = createRooms();
 const internalDoorBoundaries = rooms.slice(0, -1).map((room) => room.endZ);
 
+interface WallSegment {
+  startX: number;
+  endX: number;
+}
+
+function distributeArtworkPositions(segment: WallSegment) {
+  const width = segment.endX - segment.startX;
+  const count = Math.max(1, Math.floor(width / BACK_WALL_ARTWORK_PITCH));
+  const spacing = width / count;
+  return Array.from(
+    { length: count },
+    (_, index) => segment.startX + spacing * (index + 0.5),
+  );
+}
+
+function createBackWallPositions(last: boolean) {
+  const outerLeft = -ROOM_HALF_WIDTH + BACK_WALL_OUTER_MARGIN;
+  const outerRight = ROOM_HALF_WIDTH - BACK_WALL_OUTER_MARGIN;
+  const segments: WallSegment[] = last
+    ? [{ startX: outerLeft, endX: outerRight }]
+    : [
+        {
+          startX: outerLeft,
+          endX: -DOOR_HALF_WIDTH - BACK_WALL_DOOR_MARGIN,
+        },
+        {
+          startX: DOOR_HALF_WIDTH + BACK_WALL_DOOR_MARGIN,
+          endX: outerRight,
+        },
+      ];
+
+  return segments.flatMap(distributeArtworkPositions);
+}
+
+function getSideArtworkCount(room: RoomConfig) {
+  const last = room.id === roomOrder.at(-1);
+  return Math.max(0, room.items.length - createBackWallPositions(last).length);
+}
+
 function createArtworkSlots(): ArtworkSlot[] {
-  return rooms.flatMap((room) =>
-    room.items.map((artwork, index) => {
+  return rooms.flatMap((room) => {
+    const last = room.id === roomOrder.at(-1);
+    const backWallPositions = createBackWallPositions(last);
+    const sideArtworkCount = getSideArtworkCount(room);
+    const sideSlots = room.items.slice(0, sideArtworkCount).map((artwork, index) => {
       const leftWall = index % 2 === 0;
       const row = Math.floor(index / 2);
       return {
@@ -113,8 +159,19 @@ function createArtworkSlots(): ArtworkSlot[] {
         ],
         rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
       } as ArtworkSlot;
-    }),
-  );
+    });
+    const backSlots = room.items.slice(sideArtworkCount).map((artwork, index) => ({
+      artwork,
+      position: [
+        backWallPositions[index],
+        0,
+        room.endZ + BACK_WALL_ARTWORK_OFFSET,
+      ],
+      rotation: [0, 0, 0],
+    }) satisfies ArtworkSlot);
+
+    return [...sideSlots, ...backSlots];
+  });
 }
 
 const artworkSlots = createArtworkSlots();
@@ -858,8 +915,9 @@ interface Waypoint {
 // e retorna pela extremidade da entrada — sempre em loop.
 function buildTour(room: RoomConfig, seed: number): Waypoint[] {
   const rand = mulberry32(seed);
-  const leftRows = Math.ceil(room.items.length / 2);
-  const rightRows = Math.floor(room.items.length / 2);
+  const sideArtworkCount = getSideArtworkCount(room);
+  const leftRows = Math.ceil(sideArtworkCount / 2);
+  const rightRows = Math.floor(sideArtworkCount / 2);
   const rowZ = (row: number) => room.startZ - 2.7 - row * 2.25;
   const crossFar = room.endZ + 2.2;
   const crossNear = room.startZ - 2.2;
