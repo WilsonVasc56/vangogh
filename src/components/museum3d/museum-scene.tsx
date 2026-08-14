@@ -685,13 +685,7 @@ interface VisitorModelConfig {
 }
 
 const VISITOR_MODELS: VisitorModelConfig[] = [
-  { id: "soldier", url: "/models/visitor.glb", idle: ["Idle"], walk: ["Walk"], walkTimeScale: 0.72, tintPattern: /body/i, forwardOffset: Math.PI },
-  { id: "barbarian", url: "/models/barbarian.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "knight", url: "/models/knight.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "mage", url: "/models/mage.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "rogue", url: "/models/rogue.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "rogue_hooded", url: "/models/rogue_hooded.glb", idle: ["Idle"], walk: ["Walking_A", "Walking_B", "Walking_C"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "xbot", url: "/models/xbot.glb", idle: ["idle"], walk: ["walk"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
+  { id: "chibi-woman", url: "/models/chibi-woman.glb", idle: ["Idle_12"], walk: ["Walking"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
 ];
 
 // Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
