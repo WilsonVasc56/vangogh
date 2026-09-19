@@ -56,7 +56,7 @@ export function MuseumExperience() {
   return (
     <div className="fixed inset-0 bg-[#0b1020]">
       <Canvas
-        camera={{ fov: 62, near: 0.1, far: 220, position: [0, 1.7, 28] }}
+        camera={{ fov: 62, near: 0.1, far: 220, position: [-1.5, 1.7, 32] }}
         dpr={[1, 1.75]}
         gl={{ antialias: true }}
         shadows

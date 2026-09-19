@@ -1,7 +1,7 @@
 "use client";
 
-import { Environment, Html, Lightformer, Sky, useAnimations } from "@react-three/drei";
-import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { Environment, Lightformer, Sky, useGLTF } from "@react-three/drei";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Suspense,
@@ -15,6 +15,21 @@ import * as THREE from "three";
 import { artworks, type Artwork } from "@/data/artworks";
 import { periods, type PeriodId } from "@/data/periods";
 import { GalleryArtwork, type ArtworkSlot } from "./gallery-artwork";
+import { EXTERIOR_GLASS_SEGMENTS, ExteriorDaylight, MuseumExterior } from "./museum-exterior";
+import {
+  EXTERIOR_GARDEN_BOUNDS,
+  EXTERIOR_TREE_TRUNKS,
+  ExteriorLandscape,
+} from "./exterior-landscape";
+import { ExteriorVisitors } from "./exterior-visitors";
+import {
+  MUSEUM_WALL_COLOR,
+  MUSEUM_CEILING_COLOR,
+  MUSEUM_BASEBOARD_COLOR,
+  useChevronParquet,
+} from "./interior-materials";
+import { MuseumArtPiece, type VaseVariant } from "./museum-vases";
+import { CorridorMurals } from "./corridor-murals";
 
 interface MuseumSceneProps {
   active: boolean;
@@ -64,11 +79,11 @@ const BACK_WALL_ARTWORK_PITCH = 2.4;
 const BACK_WALL_ARTWORK_OFFSET = 0.27;
 
 const roomStyles = [
-  { wallColor: "#756b5d", floorColor: "#332c28", accent: "#b39772" },
-  { wallColor: "#d7cab4", floorColor: "#31404b", accent: "#78a3b8" },
-  { wallColor: "#dbc58f", floorColor: "#493c2c", accent: "#e3a83f" },
-  { wallColor: "#aeb8b8", floorColor: "#293b45", accent: "#6d98ab" },
-  { wallColor: "#c9c09f", floorColor: "#3b4630", accent: "#94a75d" },
+  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#b39772" },
+  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#78a3b8" },
+  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#e3a83f" },
+  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#6d98ab" },
+  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#94a75d" },
 ];
 
 const roomOrder: PeriodId[] = ["nuenen", "paris", "arles", "saint-remy", "auvers"];
@@ -200,34 +215,34 @@ interface CollisionSegment {
 }
 
 const exteriorBoxes: CollisionBox[] = [
-  // Ala de tijolos, canal, canteiro de tulipas, lampião e árvore
-  { minX: 3.9, maxX: 14.5, minZ: 0.5, maxZ: 11.5 },
-  { minX: -22.5, maxX: -13.15, minZ: 8.5, maxZ: 35 },
-  { minX: 4.2, maxX: 17.4, minZ: 20.8, maxZ: 27.2 },
-  { minX: 6.4, maxX: 7.2, minZ: 20.1, maxZ: 20.9 },
-  { minX: 16.9, maxX: 19.1, minZ: 15.9, maxZ: 18.1 },
+  { minX: 8.2, maxX: 20, minZ: -0.9, maxZ: 8.9 },
+  { minX: 7.5, maxX: 10.7, minZ: 7.55, maxZ: 7.8 },
+  { minX: -2.4, maxX: -2.24, minZ: 12.32, maxZ: 14.12 },
+  { minX: 2.24, maxX: 2.4, minZ: 12.32, maxZ: 14.12 },
+  ...EXTERIOR_GARDEN_BOUNDS,
+  { minX: -12.9, maxX: -10.1, minZ: 18.5, maxZ: 19.3 },
+  { minX: 12.4, maxX: 15.2, minZ: 18.5, maxZ: 19.3 },
+  { minX: -13.5, maxX: -11.5, minZ: 23.5, maxZ: 29.3 },
+  { minX: -14.08, maxX: -13.92, minZ: 20.42, maxZ: 20.58 },
+  { minX: 17.72, maxX: 17.88, minZ: 20.42, maxZ: 20.58 },
 ];
 
 const exteriorEllipses: CollisionEllipse[] = [
-  // Volume curvo branco. O raio deixa o eixo central da entrada livre.
-  { x: -7.2, z: 6.8, radiusX: 6.75, radiusZ: 4.55 },
+  { x: -8.8, z: 5.5, radiusX: 6.5, radiusZ: 5.8 },
+  ...EXTERIOR_TREE_TRUNKS.map(({ x, z, radius }) => ({
+    x,
+    z,
+    radiusX: radius,
+    radiusZ: radius,
+  })),
 ];
 
 const glassWallSegments: CollisionSegment[] = [
-  ...[-1.35, -1.08, -0.82, 0.82, 1.08, 1.35].map((angle) => {
-    const x = Math.sin(angle) * 6.3;
-    const z = 11 + Math.cos(angle) * 3.7;
-    const half = 0.85;
-    return {
-      ax: x - Math.cos(angle) * half,
-      az: z + Math.sin(angle) * half,
-      bx: x + Math.cos(angle) * half,
-      bz: z - Math.sin(angle) * half,
-    };
-  }),
-  // Fachada frontal de vidro, preservando apenas o vão central da porta.
-  { ax: -6, az: 14.18, bx: -1.72, bz: 14.18 },
-  { ax: 1.72, az: 14.18, bx: 6, bz: 14.18 },
+  ...EXTERIOR_GLASS_SEGMENTS,
+  // Fitas da fila: colidir com cada vão impede atravessá-las lateralmente.
+  ...[2.1, 4.15].flatMap((x) => [
+    { ax: x, az: 17.4, bx: x, bz: 20.6 },
+  ]),
 ];
 
 const roomDecorBoxes: CollisionBox[] = rooms.flatMap((room) => [
@@ -341,8 +356,9 @@ function GalleryControls({
 }) {
   const { camera, gl } = useThree();
   const keys = useRef(new Set<string>());
-  const yaw = useRef(0);
-  const pitch = useRef(0);
+  // Arrival framing follows the tall, asymmetric entrance reference.
+  const yaw = useRef(-0.055);
+  const pitch = useRef(0.1);
   const raycaster = useRef(new THREE.Raycaster());
   const currentRoom = useRef<PeriodId | null>(null);
   const processedInteraction = useRef(interactionToken);
@@ -482,7 +498,7 @@ function GalleryControls({
     let nextZ = THREE.MathUtils.clamp(
       camera.position.z + direction.y,
       rooms.at(-1)!.endZ + 0.75,
-      30,
+      42,
     );
 
     const exteriorResolved = resolveExteriorMovement(previousX, previousZ, nextX, nextZ);
@@ -575,25 +591,40 @@ function SlidingDoors({
     if (right.current) right.current.position.x = THREE.MathUtils.damp(right.current.position.x, target, 4.5, delta);
   });
 
-  const color = entrance ? "#85aec9" : "#927446";
-  const opacity = entrance ? 0.48 : 0.78;
+  const color = entrance ? "#bdcfca" : "#927446";
+  const opacity = entrance ? 0.23 : 0.78;
+  const metalness = entrance ? 0.12 : 0.65;
+  const roughness = entrance ? 0.12 : 0.14;
   return <group position={[0, 0, z]}>
     <group ref={left} position={[-0.9, 0, 0]}>
       <mesh ref={leftPanel} position={[0, 1.9, 0]}>
         <boxGeometry args={[1.8, 3.8, 0.13]} />
-        <meshStandardMaterial color={color} transparent opacity={opacity} metalness={0.65} roughness={0.14} />
+        <meshStandardMaterial color={color} transparent opacity={opacity} metalness={metalness} roughness={roughness} />
       </mesh>
+      {entrance && <EntranceDoorFrame />}
     </group>
     <group ref={right} position={[0.9, 0, 0]}>
       <mesh ref={rightPanel} position={[0, 1.9, 0]}>
         <boxGeometry args={[1.8, 3.8, 0.13]} />
-        <meshStandardMaterial color={color} transparent opacity={opacity} metalness={0.65} roughness={0.14} />
+        <meshStandardMaterial color={color} transparent opacity={opacity} metalness={metalness} roughness={roughness} />
       </mesh>
+      {entrance && <EntranceDoorFrame />}
     </group>
-    <mesh position={[0, 4.12, 0]}>
+    {!entrance && <mesh position={[0, 4.12, 0]}>
       <boxGeometry args={[4.1, 0.42, 0.24]} />
-      <meshStandardMaterial color={entrance ? "#d8b44c" : "#4c4033"} />
-    </mesh>
+      <meshStandardMaterial color="#4c4033" />
+    </mesh>}
+  </group>;
+}
+
+function EntranceDoorFrame() {
+  return <group>
+    {[-0.88, 0.88].map((x) => <mesh key={x} position={[x, 1.9, 0.075]}>
+      <boxGeometry args={[0.045, 3.8, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
+    </mesh>)}
+    {[0.05, 3.75].map((y) => <mesh key={y} position={[0, y, 0.075]}>
+      <boxGeometry args={[1.8, 0.065, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
+    </mesh>)}
   </group>;
 }
 
@@ -673,39 +704,6 @@ function GlassPavilion() {
   </group>;
 }
 
-const vaseProfile = [
-  new THREE.Vector2(0.16, 0),
-  new THREE.Vector2(0.36, 0.08),
-  new THREE.Vector2(0.42, 0.38),
-  new THREE.Vector2(0.3, 0.62),
-  new THREE.Vector2(0.22, 0.78),
-  new THREE.Vector2(0.25, 0.9),
-];
-
-function MuseumVase({
-  position,
-  color,
-}: {
-  position: [number, number, number];
-  color: string;
-}) {
-  return <group position={position}>
-    <mesh position={[0, 0.42, 0]}>
-      <boxGeometry args={[0.92, 0.84, 0.92]} />
-      <meshStandardMaterial color="#d8d1c2" roughness={0.82} />
-    </mesh>
-    <mesh position={[0, 0.92, 0]}>
-      <latheGeometry args={[vaseProfile, 24]} />
-      <meshStandardMaterial color={color} roughness={0.32} metalness={0.16} />
-    </mesh>
-    {[-0.16, 0, 0.16].map((x, index) => <group key={x} position={[x, 1.76, 0]} rotation={[0, 0, (index - 1) * 0.2]}>
-      <mesh position={[0, 0.33, 0]}><cylinderGeometry args={[0.018, 0.024, 0.72, 7]} /><meshStandardMaterial color="#31583b" /></mesh>
-      <mesh position={[0.12, 0.36, 0]} rotation={[0, 0, -0.55]}><sphereGeometry args={[0.19, 10, 7]} /><meshStandardMaterial color="#47704d" roughness={1} /></mesh>
-      <mesh position={[-0.1, 0.56, 0]} rotation={[0, 0, 0.55]}><sphereGeometry args={[0.16, 10, 7]} /><meshStandardMaterial color="#385f42" roughness={1} /></mesh>
-    </group>)}
-  </group>;
-}
-
 function MuseumBench({
   position,
   rotationY = 0,
@@ -721,169 +719,94 @@ function MuseumBench({
 }
 
 /* ---------------------------------------------------------------------- */
-/* Modelos humanos: registry de GLBs + aparência determinística           */
-/* ---------------------------------------------------------------------- */
+const VISITOR_MODEL = "/models/exterior-visitor.glb";
 
-interface VisitorModelConfig {
-  id: string;
-  url: string;
-  /** Clips candidatos, na ordem de preferência (cada GLB nomeia diferente). */
-  idle: string[];
-  walk: string[];
-  walkTimeScale: number;
-  /** Materiais que recebem tint; null = textura original, sem recolorir. */
-  tintPattern: RegExp | null;
-  /**
-   * Quanto somar a um yaw expresso na convenção "frente +Z" para alinhar o
-   * rig. visitor.glb (Mixamo/Soldier) olha para -Z e precisa de 180°;
-   * os KayKit seguem o padrão glTF (frente +Z) e não precisam de ajuste.
-   */
-  forwardOffset: number;
-}
+const visitorTints = ["#4a6174", "#7b6858", "#3f5446", "#584d66", "#6f5b4a", "#8c877d"];
+const visitorHairColors = ["#30281e", "#715e4b", "#c4bfb6", "#3f3630", "#877254", "#d5d1c8"];
 
-const VISITOR_MODELS: VisitorModelConfig[] = [
-  { id: "chibi-woman", url: "/models/chibi-woman.glb", idle: ["Idle_12"], walk: ["Walking"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "pixar", url: "/models/pixar.glb", idle: ["Armature|Idle_3|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "elderly", url: "/models/elderly.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "elderly-woman", url: "/models/elderly-woman.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "teen", url: "/models/teen.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-  { id: "girl", url: "/models/girl.glb", idle: ["Armature|Idle_9|baselayer"], walk: ["Armature|walking_man|baselayer"], walkTimeScale: 1, tintPattern: null, forwardOffset: 0 },
-];
-
-// Paleta de roupas aplicada ao material "body" do soldado (os demais modelos
-// já trazem texturas próprias e não são recoloridos).
-const visitorTints = [
-  "#7d3941", "#315a69", "#8a6a32", "#5b4770", "#41644d", "#6b4a2f",
-  "#274156", "#7a4a5e", "#4f6134", "#845c2c",
-];
-
-interface VisitorAppearance {
-  model: VisitorModelConfig;
-  tint: string | null;
-  height: number;
-}
-
-// Aparência determinística: o modelo é atribuído por slot (garantindo modelos
-// distintos dentro de cada sala) e a seed varia cor (quando tingível) e altura,
-// para que nenhum dos visitantes pareça clone de outro.
-function resolveVisitorAppearance(
-  modelIndex: number,
-  seed: number,
-): VisitorAppearance {
-  const rand = mulberry32(seed);
-  const model = VISITOR_MODELS[modelIndex % VISITOR_MODELS.length];
-  const tint = model.tintPattern
-    ? visitorTints[Math.floor(rand() * visitorTints.length)]
-    : null;
-  const height = 1.62 + rand() * 0.28;
-  return { model, tint, height };
-}
-
-function resolveClip(
-  actions: Record<string, THREE.AnimationAction | null>,
-  candidates: string[],
-) {
-  for (const name of candidates) {
-    const action = actions[name];
-    if (action) return action;
-  }
-  return null;
-}
-
-interface LoadedVisitorModel {
-  gltf: GLTF;
-  /** Escala que normaliza a altura nativa do GLB para a altura desejada. */
-  scale: number;
-}
-
-// Carrega o GLB do modelo, aplica sombras/tint e mede a altura nativa para
-// normalizar personagens de fontes diferentes (Mixamo, KayKit, Xbot).
-// Cada visitante carrega a própria instância: clonar SkinnedMesh quebra o
-// rig e torna o modelo invisível, então o arquivo (em cache HTTP) é parseado
-// por instância.
-function useVisitorModel(
-  config: VisitorModelConfig,
-  tint: string | null,
-  height: number,
-): LoadedVisitorModel | null {
-  const [loaded, setLoaded] = useState<LoadedVisitorModel | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    new GLTFLoader().load(
-      config.url,
-      (gltf) => {
-        if (!alive) return;
-        gltf.scene.traverse((object) => {
-          const mesh = object as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.castShadow = true;
-          if (!config.tintPattern || !tint) return;
-          (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach(
-            (material) => {
-              if (config.tintPattern!.test(material.name)) {
-                (material as THREE.MeshStandardMaterial).color = new THREE.Color(tint);
-              }
-            },
-          );
-        });
-        const size = new THREE.Box3()
-          .setFromObject(gltf.scene)
-          .getSize(new THREE.Vector3());
-        const scale = size.y > 0.01 ? height / size.y : 1;
-        setLoaded({ gltf, scale });
-      },
-      undefined,
-      () => {
-        if (alive) setLoaded(null);
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [config, tint, height]);
-
-  return loaded;
-}
-
-// Humano parado diante de uma obra (animação Idle), com aparência única
-// derivada da seed.
 function Visitor({
   position,
   rotationY = 0,
-  modelIndex,
-  seed,
+  tint = "#4a6174",
+  hair = "#352b25",
+  scale = 1,
 }: {
   position: [number, number, number];
   rotationY?: number;
-  modelIndex: number;
-  seed: number;
+  tint?: string;
+  hair?: string;
+  scale?: number;
 }) {
-  const appearance = useMemo(
-    () => resolveVisitorAppearance(modelIndex, seed),
-    [modelIndex, seed],
-  );
-  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
+  const gltf = useGLTF(VISITOR_MODEL);
   const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
+  const prepared = useMemo(() => {
+    const scene = cloneSkeleton(gltf.scene);
+    const clonedMaterials = new Map<THREE.Material, THREE.Material>();
+    const clonedSkeletons = new Set<THREE.Skeleton>();
+
+    scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      if (object instanceof THREE.SkinnedMesh) clonedSkeletons.add(object.skeleton);
+
+      const originalMaterials = Array.isArray(object.material) ? object.material : [object.material];
+      const updatedMaterials = originalMaterials.map((material) => {
+        if (!["LightBrown", "Hair", "Eyebrows", "Red_Dark"].includes(material.name)) return material;
+        const existing = clonedMaterials.get(material);
+        if (existing) return existing;
+        const clone = material.clone();
+        if (clone instanceof THREE.MeshStandardMaterial) {
+          if (material.name === "LightBrown") clone.color.set(tint);
+          if (material.name === "Hair" || material.name === "Eyebrows") clone.color.set(hair);
+          if (material.name === "Red_Dark") clone.color.set("#413d36");
+          clone.roughness = 0.9;
+        }
+        clonedMaterials.set(material, clone);
+        return clone;
+      });
+      object.material = Array.isArray(object.material) ? updatedMaterials : updatedMaterials[0];
+    });
+
+    return {
+      scene,
+      materials: [...clonedMaterials.values()],
+      skeletons: [...clonedSkeletons],
+    };
+  }, [gltf.scene, hair, tint]);
+
+  const mixer = useMemo(() => new THREE.AnimationMixer(prepared.scene), [prepared.scene]);
 
   useEffect(() => {
-    const action = resolveClip(actions, appearance.model.idle);
-    if (!action) return;
+    const clip = gltf.animations.find((a) => a.name.endsWith("|Idle_Neutral"));
+    if (!clip) return;
+    const action = mixer.clipAction(clip);
     action.reset().play();
+    action.time = Math.abs(position[0] * 0.43 + position[2] * 0.17) % clip.duration;
+    mixer.update(0);
     return () => {
-      action.stop();
+      mixer.stopAllAction();
+      mixer.uncacheRoot(prepared.scene);
     };
-  }, [actions, appearance]);
+  }, [gltf.animations, mixer, position, prepared.scene]);
 
-  return <group ref={person} position={position} rotation={[0, rotationY + appearance.model.forwardOffset, 0]}>
-    {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
-  </group>;
+  useEffect(() => {
+    return () => {
+      prepared.materials.forEach((m) => m.dispose());
+      prepared.skeletons.forEach((s) => s.dispose());
+    };
+  }, [prepared]);
+
+  useFrame((_, delta) => {
+    mixer.update(Math.min(delta, 0.08));
+  });
+
+  return (
+    <group ref={person} position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <primitive object={prepared.scene} />
+    </group>
+  );
 }
-
-/* ---------------------------------------------------------------------- */
-/* Visitante que percorre a sala como em um museu real                     */
-/* ---------------------------------------------------------------------- */
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -910,18 +833,14 @@ interface Waypoint {
   dwell?: number;
 }
 
-// Roteiro coerente: desce pela parede esquerda observando obras, cruza a sala
-// na extremidade do fundo (longe do banco central), sobe pela parede direita
-// e retorna pela extremidade da entrada — sempre em loop.
 function buildTour(room: RoomConfig, seed: number): Waypoint[] {
   const rand = mulberry32(seed);
-  const sideArtworkCount = getSideArtworkCount(room);
-  const leftRows = Math.ceil(sideArtworkCount / 2);
-  const rightRows = Math.floor(sideArtworkCount / 2);
+  const leftRows = Math.ceil(room.items.length / 2);
+  const rightRows = Math.floor(room.items.length / 2);
   const rowZ = (row: number) => room.startZ - 2.7 - row * 2.25;
   const crossFar = room.endZ + 2.2;
   const crossNear = room.startZ - 2.2;
-  const skipRightRow = room.items.length > 3 ? 1 : 0; // obra ocupada pelo visitante estático
+  const skipRightRow = room.items.length > 3 ? 1 : 0;
   const tour: Waypoint[] = [];
 
   for (let row = 0; row < leftRows; row++) {
@@ -930,97 +849,146 @@ function buildTour(room: RoomConfig, seed: number): Waypoint[] {
       tour.push({
         x: -6.45,
         z: rowZ(row) - 0.5,
-        viewYaw: Math.PI / 2,
-        dwell: 2.5 + rand() * 3.5,
+        viewYaw: -Math.PI / 2,
+        dwell: 3.5 + rand() * 4,
       });
     }
   }
-  tour.push({ x: -3, z: crossFar }, { x: 3, z: crossFar });
+  tour.push({ x: -2.5, z: crossFar }, { x: 2.5, z: crossFar });
   for (let row = rightRows - 1; row >= 0; row--) {
     if (row === skipRightRow) continue;
     if (rand() < 0.8) {
       tour.push({
         x: 6.45,
         z: rowZ(row) + 0.5,
-        viewYaw: -Math.PI / 2,
-        dwell: 2.5 + rand() * 3.5,
+        viewYaw: Math.PI / 2,
+        dwell: 3.5 + rand() * 4,
       });
     }
   }
-  tour.push({ x: 3, z: crossNear }, { x: -3, z: crossNear });
+  tour.push({ x: 2.5, z: crossNear }, { x: -2.5, z: crossNear });
   return tour;
 }
 
 function RoamingVisitor({
   room,
-  modelIndex,
   seed,
+  tint = "#566c7f",
+  hair = "#3b2f27",
+  scale = 1,
 }: {
   room: RoomConfig;
-  modelIndex: number;
   seed: number;
+  tint?: string;
+  hair?: string;
+  scale?: number;
 }) {
-  const appearance = useMemo(
-    () => resolveVisitorAppearance(modelIndex, seed * 31 + 7),
-    [modelIndex, seed],
-  );
-  const loaded = useVisitorModel(appearance.model, appearance.tint, appearance.height);
+  const gltf = useGLTF(VISITOR_MODEL);
   const person = useRef<THREE.Group>(null);
-  const { actions } = useAnimations(loaded?.gltf.animations ?? [], person);
   const tour = useMemo(() => buildTour(room, seed), [room, seed]);
-  // s.yaw segue a convenção do roteiro (frente -Z); o offset do modelo alinha
-  // rigs que olham para +Z (glTF padrão) ou -Z (Mixamo).
-  const yawOffset = appearance.model.forwardOffset - Math.PI;
   const state = useRef({
     wp: 0,
     mode: "walk" as "walk" | "view",
     timer: 0,
     yaw: Math.PI / 2,
-    speed: 1 + mulberry32(seed)() * 0.5,
+    speed: 0.65 + mulberry32(seed)() * 0.25,
   });
-  const currentAnim = useRef<"walk" | "idle" | null>(null);
 
-  useFrame((_, delta) => {
-    if (!person.current || tour.length === 0) return;
-    const s = state.current;
+  const prepared = useMemo(() => {
+    const scene = cloneSkeleton(gltf.scene);
+    const clonedMaterials = new Map<THREE.Material, THREE.Material>();
+    const clonedSkeletons = new Set<THREE.Skeleton>();
 
-    const setAnim = (kind: "walk" | "idle") => {
-      if (currentAnim.current === kind) return;
-      const next = resolveClip(
-        actions,
-        kind === "walk" ? appearance.model.walk : appearance.model.idle,
-      );
-      if (!next) return;
-      const previous = resolveClip(
-        actions,
-        currentAnim.current === "walk"
-          ? appearance.model.walk
-          : appearance.model.idle,
-      );
-      next.timeScale = kind === "walk" ? appearance.model.walkTimeScale : 1;
-      next.reset().fadeIn(0.3).play();
-      previous?.fadeOut(0.3);
-      currentAnim.current = kind;
+    scene.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      if (object instanceof THREE.SkinnedMesh) clonedSkeletons.add(object.skeleton);
+
+      const originalMaterials = Array.isArray(object.material) ? object.material : [object.material];
+      const updatedMaterials = originalMaterials.map((material) => {
+        if (!["LightBrown", "Hair", "Eyebrows", "Red_Dark"].includes(material.name)) return material;
+        const existing = clonedMaterials.get(material);
+        if (existing) return existing;
+        const clone = material.clone();
+        if (clone instanceof THREE.MeshStandardMaterial) {
+          if (material.name === "LightBrown") clone.color.set(tint);
+          if (material.name === "Hair" || material.name === "Eyebrows") clone.color.set(hair);
+          if (material.name === "Red_Dark") clone.color.set("#413d36");
+          clone.roughness = 0.9;
+        }
+        clonedMaterials.set(material, clone);
+        return clone;
+      });
+      object.material = Array.isArray(object.material) ? updatedMaterials : updatedMaterials[0];
+    });
+
+    return {
+      scene,
+      materials: [...clonedMaterials.values()],
+      skeletons: [...clonedSkeletons],
     };
+  }, [gltf.scene, hair, tint]);
 
+  const mixer = useMemo(() => new THREE.AnimationMixer(prepared.scene), [prepared.scene]);
+  const actions = useRef<{ idle: THREE.AnimationAction; walk: THREE.AnimationAction } | null>(null);
+
+  useEffect(() => {
+    const idleClip = gltf.animations.find((a) => a.name.endsWith("|Idle_Neutral"));
+    const walkClip = gltf.animations.find((a) => a.name.endsWith("|Walk"));
+    if (!idleClip || !walkClip) return;
+    const idle = mixer.clipAction(idleClip);
+    const walk = mixer.clipAction(walkClip);
+    idle.reset().setEffectiveWeight(1).play();
+    walk.reset().setEffectiveWeight(0).play();
+    actions.current = { idle, walk };
+    mixer.update(0);
+    return () => {
+      actions.current = null;
+      mixer.stopAllAction();
+      mixer.uncacheRoot(prepared.scene);
+    };
+  }, [gltf.animations, mixer, prepared.scene]);
+
+  useEffect(() => {
+    return () => {
+      prepared.materials.forEach((m) => m.dispose());
+      prepared.skeletons.forEach((s) => s.dispose());
+    };
+  }, [prepared]);
+
+  useFrame((_, deltaFrame) => {
+    if (!person.current || tour.length === 0) return;
+    const delta = Math.min(deltaFrame, 0.08);
+    mixer.update(delta);
+
+    const s = state.current;
     const target = tour[s.wp];
+
     if (s.mode === "view") {
-      setAnim("idle");
+      if (actions.current) {
+        actions.current.idle.setEffectiveWeight(1);
+        actions.current.walk.setEffectiveWeight(0);
+      }
       s.timer -= delta;
-      s.yaw = dampAngle(s.yaw, target.viewYaw ?? s.yaw, 8, delta);
+      s.yaw = dampAngle(s.yaw, target.viewYaw ?? s.yaw, 7, delta);
       if (s.timer <= 0) {
         s.mode = "walk";
         s.wp = (s.wp + 1) % tour.length;
       }
     } else {
-      setAnim("walk");
+      if (actions.current) {
+        actions.current.idle.setEffectiveWeight(0);
+        actions.current.walk.setEffectiveWeight(1);
+        actions.current.walk.setEffectiveTimeScale(0.72);
+      }
       const dx = target.x - person.current.position.x;
       const dz = target.z - person.current.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 0.08) {
+      if (dist < 0.12) {
         if (target.viewYaw !== undefined) {
           s.mode = "view";
-          s.timer = target.dwell ?? 3;
+          s.timer = target.dwell ?? 3.5;
         } else {
           s.wp = (s.wp + 1) % tour.length;
         }
@@ -1028,19 +996,20 @@ function RoamingVisitor({
         const step = Math.min(dist, s.speed * delta);
         person.current.position.x += (dx / dist) * step;
         person.current.position.z += (dz / dist) * step;
-        s.yaw = dampAngle(s.yaw, Math.atan2(-dx, -dz), 10, delta);
+        s.yaw = dampAngle(s.yaw, Math.atan2(dx, dz), 8, delta);
       }
     }
-    person.current.rotation.y = s.yaw + yawOffset;
+    person.current.rotation.y = s.yaw;
   });
 
   return (
     <group
       ref={person}
       position={[-3, 0, room.startZ - 2.2]}
-      rotation={[0, Math.PI / 2 + yawOffset, 0]}
+      rotation={[0, Math.PI / 2, 0]}
+      scale={scale}
     >
-      {loaded && <primitive object={loaded.gltf.scene} scale={loaded.scale} />}
+      <primitive object={prepared.scene} />
     </group>
   );
 }
@@ -1050,92 +1019,88 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
   const secondRowZ = room.startZ - 4.95;
 
   return <group>
-    <MuseumVase position={[-6.65, 0, room.startZ - 1.15]} color={room.accent} />
-    <MuseumVase position={[6.65, 0, room.endZ + 1.25]} color={index % 2 ? "#586f83" : "#9a6845"} />
+    {/* Peças de arte e vasos escultóricos sobre plintos de mármore */}
+    <MuseumArtPiece
+      position={[-6.65, 0, room.startZ - 1.15]}
+      rotationY={Math.PI * 0.85}
+      variant={((index * 2) % 4) as VaseVariant}
+    />
+    <MuseumArtPiece
+      position={[6.65, 0, room.endZ + 1.25]}
+      rotationY={-Math.PI * 0.35}
+      variant={((index * 2 + 1) % 4) as VaseVariant}
+    />
     <MuseumBench position={[0, 0, room.centerZ]} rotationY={Math.PI / 2} />
 
-    {/* Visitantes humanos parados diante das obras */}
+    {/* Visitantes humanos contemplando obras e circulando na sala */}
     <Suspense fallback={null}>
       <Visitor
         position={[-6.7, 0, firstPaintingZ]}
         rotationY={-Math.PI / 2}
-        modelIndex={index}
-        seed={index * 211 + 3}
+        tint={visitorTints[index % visitorTints.length]}
+        hair={visitorHairColors[index % visitorHairColors.length]}
+        scale={0.98 + (index % 3) * 0.03}
       />
       <Visitor
         position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
-        modelIndex={index + 3}
-        seed={index * 211 + 104}
+        tint={visitorTints[(index + 2) % visitorTints.length]}
+        hair={visitorHairColors[(index + 2) % visitorHairColors.length]}
+        scale={0.96 + ((index + 1) % 3) * 0.04}
       />
 
       {/* Visitante percorrendo a sala como em um museu real */}
       <RoamingVisitor
         room={room}
-        modelIndex={index + 4}
         seed={index * 97 + 13}
+        tint={visitorTints[(index + 1) % visitorTints.length]}
+        hair={visitorHairColors[(index + 1) % visitorHairColors.length]}
+        scale={1 + (index % 2) * 0.04}
       />
     </Suspense>
   </group>;
 }
 
-function Room({
-  room,
-  last,
-  index,
-  isMobile,
-}: {
-  room: RoomConfig;
-  last: boolean;
-  index: number;
-  isMobile: boolean;
-}) {
-  const floorTexture = roomFloorTextures[index];
-  const wallTexture = roomWallTextures[index];
-  const endWallTexture = roomEndWallTextures[index];
-  const wallMaterial = (texture: THREE.Texture | null) => (
-    <meshStandardMaterial
-      color={texture ? "#ffffff" : room.wallColor}
-      map={texture ?? undefined}
-      roughness={0.92}
-    />
-  );
-
+function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: number }) {
+  const parquet = useChevronParquet(8, Math.round(room.length * 0.55));
   return <group>
+    {/* Piso em parquet chevron de madeira clara */}
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, room.centerZ]} receiveShadow>
       <planeGeometry args={[ROOM_HALF_WIDTH * 2, room.length]} />
       <meshStandardMaterial
-        color={floorTexture ? "#ffffff" : room.floorColor}
-        map={floorTexture ?? undefined}
-        roughness={0.66}
+        map={parquet?.map}
+        bumpMap={parquet?.bumpMap}
+        bumpScale={0.032}
+        color="#f2dfc6"
+        roughness={0.62}
       />
     </mesh>
+
+    {/* Paredes laterais em cinza-escuro museológico elegante */}
     <mesh position={[-ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      {wallMaterial(wallTexture)}
+      <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
     <mesh position={[ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
       <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
-      {wallMaterial(wallTexture)}
-    </mesh>
-    <mesh position={[0, ROOM_HEIGHT, room.centerZ]}>
-      <boxGeometry args={[ROOM_HALF_WIDTH * 2, 0.22, room.length]} />
-      <meshStandardMaterial color="#313b49" roughness={0.72} />
+      <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
 
-    {/* Rodapé e friso de pendurar quadros, como em galerias reais */}
-    {[-1, 1].map((side) => (
-      <group key={side}>
-        <mesh position={[side * (ROOM_HALF_WIDTH - 0.16), 0.06, room.centerZ]}>
-          <boxGeometry args={[0.04, 0.12, room.length]} />
-          <meshStandardMaterial color={shade(room.wallColor, 0.55)} roughness={0.6} />
-        </mesh>
-        <mesh position={[side * (ROOM_HALF_WIDTH - 0.165), 3.12, room.centerZ]}>
-          <boxGeometry args={[0.03, 0.07, room.length]} />
-          <meshStandardMaterial color={shade(room.wallColor, 1.18)} roughness={0.7} />
-        </mesh>
-      </group>
-    ))}
+    {/* Rodapés de madeira natural na base das paredes (como na foto de referência) */}
+    <mesh position={[-ROOM_HALF_WIDTH + 0.17, 0.08, room.centerZ]}>
+      <boxGeometry args={[0.04, 0.16, room.length]} />
+      <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+    </mesh>
+    <mesh position={[ROOM_HALF_WIDTH - 0.17, 0.08, room.centerZ]}>
+      <boxGeometry args={[0.04, 0.16, room.length]} />
+      <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+    </mesh>
+
+    {/* Teto escuro de galeria */}
+    <mesh position={[0, ROOM_HEIGHT, room.centerZ]}>
+      <boxGeometry args={[ROOM_HALF_WIDTH * 2, 0.22, room.length]} />
+      <meshStandardMaterial color={MUSEUM_CEILING_COLOR} roughness={0.88} />
+    </mesh>
 
     {/* Faixa de identificação visual do período */}
     <mesh position={[-ROOM_HALF_WIDTH + 0.19, 4.9, room.startZ - 1.7]} rotation={[0, Math.PI / 2, 0]}>
@@ -1145,35 +1110,43 @@ function Room({
 
     {/* Parede final com vão central, exceto na última sala */}
     {last ? (
-      <mesh position={[0, ROOM_HEIGHT / 2, room.endZ]}>
-        <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, 0.28]} />
-        {wallMaterial(endWallTexture)}
-      </mesh>
+      <>
+        <mesh position={[0, ROOM_HEIGHT / 2, room.endZ]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, 0.28]} />
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+        </mesh>
+        <mesh position={[0, 0.08, room.endZ + 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH * 2, 0.16, 0.04]} />
+          <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+        </mesh>
+      </>
     ) : (
       <>
         <mesh position={[-(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          {wallMaterial(endWallTexture)}
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         <mesh position={[(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
           <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
-          {wallMaterial(endWallTexture)}
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         <mesh position={[0, 5.25, room.endZ]}>
           <boxGeometry args={[DOOR_HALF_WIDTH * 2, ROOM_HEIGHT - 4, 0.28]} />
-          {wallMaterial(endWallTexture)}
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+        </mesh>
+        {/* Rodapés na parede divisória */}
+        <mesh position={[-(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, 0.08, room.endZ + 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, 0.16, 0.04]} />
+          <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+        </mesh>
+        <mesh position={[(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, 0.08, room.endZ + 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, 0.16, 0.04]} />
+          <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
         </mesh>
       </>
     )}
 
-    <pointLight position={[0, 5.6, room.centerZ]} intensity={34} distance={room.length * 0.8} color="#ffe8bd" />
-    {/* Luzes quentes rasando as paredes das obras; fora do mobile para poupar fill-rate */}
-    {!isMobile && (
-      <>
-        <pointLight position={[-6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
-        <pointLight position={[6.2, 3.4, room.centerZ]} intensity={14} distance={room.length * 0.55} color="#ffe8bd" />
-      </>
-    )}
+    <pointLight position={[0, 5.6, room.centerZ]} intensity={46} distance={room.length * 0.8} color="#ffe8bd" />
     <mesh position={[0, ROOM_HEIGHT - 0.14, room.centerZ]}>
       <boxGeometry args={[3.2, 0.08, Math.max(4, room.length - 3)]} />
       <meshStandardMaterial color="#fff1ca" emissive="#ffe8b0" emissiveIntensity={1.1} toneMapped={false} />
@@ -1182,335 +1155,51 @@ function Room({
   </group>;
 }
 
-/* ---------------------------------------------------------------------- */
-/* Texturas procedurais geradas no cliente (sem dependência de rede)       */
-/* ---------------------------------------------------------------------- */
-
-function makeCanvasTexture(
-  draw: (ctx: CanvasRenderingContext2D, size: number) => void,
-  repeatX: number,
-  repeatY: number,
-) {
-  if (typeof document === "undefined") return null;
-  const size = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  draw(ctx, size);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(repeatX, repeatY);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
-}
-
-function shade(hex: string, factor: number) {
-  const value = parseInt(hex.slice(1), 16);
-  const r = Math.min(255, ((value >> 16) & 255) * factor) | 0;
-  const g = Math.min(255, ((value >> 8) & 255) * factor) | 0;
-  const b = Math.min(255, (value & 255) * factor) | 0;
-  return `rgb(${r},${g},${b})`;
-}
-
-function drawPavers(ctx: CanvasRenderingContext2D, size: number) {
-  ctx.fillStyle = "#8d5a41";
-  ctx.fillRect(0, 0, size, size);
-  const bw = size / 8;
-  const bh = size / 16;
-  for (let row = 0; row < 16; row++) {
-    const offset = row % 2 ? bw / 2 : 0;
-    for (let col = -1; col < 9; col++) {
-      const factor = 0.86 + ((row * 37 + col * 13) % 9) / 45;
-      ctx.fillStyle = shade("#c07a54", factor);
-      ctx.fillRect(col * bw + offset + 1, row * bh + 1, bw - 2, bh - 2);
-    }
-  }
-}
-
-function drawYellowBricks(ctx: CanvasRenderingContext2D, size: number) {
-  ctx.fillStyle = "#b9a583";
-  ctx.fillRect(0, 0, size, size);
-  const bw = size / 6;
-  const bh = size / 18;
-  for (let row = 0; row < 18; row++) {
-    const offset = row % 2 ? bw / 2 : 0;
-    for (let col = -1; col < 7; col++) {
-      const factor = 0.9 + ((row * 29 + col * 17) % 8) / 40;
-      ctx.fillStyle = shade("#cf9552", factor);
-      ctx.fillRect(col * bw + offset + 1, row * bh + 1, bw - 2, bh - 2);
-    }
-  }
-}
-
-function drawConcrete(ctx: CanvasRenderingContext2D, size: number) {
-  ctx.fillStyle = "#d9d6cf";
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 900; i++) {
-    const x = (i * 73) % size;
-    const y = (i * 149) % size;
-    ctx.fillStyle = i % 2 ? "rgba(120,118,110,0.08)" : "rgba(255,255,255,0.07)";
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.strokeStyle = "rgba(110,108,100,0.25)";
-  ctx.lineWidth = 2;
-  for (let x = 0; x <= size; x += size / 4) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, size);
-    ctx.stroke();
-  }
-}
-
-// Piso de madeira em tábuas corridas, tingido pela paleta da sala.
-function drawParquet(ctx: CanvasRenderingContext2D, size: number, base: string) {
-  ctx.fillStyle = shade(base, 0.9);
-  ctx.fillRect(0, 0, size, size);
-  const plankLength = size / 3;
-  const plankWidth = size / 16;
-  for (let row = 0; row < 16; row++) {
-    const offset = row % 2 ? plankLength / 2 : 0;
-    for (let col = -1; col < 4; col++) {
-      const factor = 0.92 + ((row * 43 + col * 23) % 12) / 30;
-      ctx.fillStyle = shade(base, factor);
-      ctx.fillRect(col * plankLength + offset + 1, row * plankWidth + 1, plankLength - 2, plankWidth - 2);
-      // Veio discreto ao longo da tábua
-      ctx.fillStyle = shade(base, factor * 0.9);
-      const grainY = row * plankWidth + 3 + ((col * 29 + row * 11) % Math.max(1, plankWidth - 6));
-      ctx.fillRect(col * plankLength + offset + 6, grainY, plankLength - 12, 1.4);
-    }
-  }
-}
-
-// Reboco de parede: ruído fino + manchas amplas de variação de valor.
-function drawPlaster(ctx: CanvasRenderingContext2D, size: number, base: string) {
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-  for (let i = 0; i < 700; i++) {
-    const x = (i * 97) % size;
-    const y = (i * 57) % size;
-    ctx.fillStyle = i % 2 ? "rgba(0,0,0,0.045)" : "rgba(255,255,255,0.05)";
-    ctx.fillRect(x, y, 2, 2);
-  }
-  for (let i = 0; i < 14; i++) {
-    const x = (i * 71) % size;
-    const y = (i * 131) % size;
-    const radius = 18 + ((i * 13) % 26);
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, i % 2 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.045)");
-    gradient.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-const plazaTexture = makeCanvasTexture(drawPavers, 16, 10);
-const yellowBrickTexture = makeCanvasTexture(drawYellowBricks, 3, 3);
-const concreteTexture = makeCanvasTexture(drawConcrete, 5, 2);
-
-// Uma textura de piso e parede por sala (tile de ~1,8 m no piso, ~3 m na parede).
-const roomFloorTextures = rooms.map((room) =>
-  makeCanvasTexture(
-    (ctx, size) => drawParquet(ctx, size, room.floorColor),
-    9.5,
-    Math.max(6, room.length / 1.8),
-  ),
-);
-const roomWallTextures = rooms.map((room) =>
-  makeCanvasTexture(
-    (ctx, size) => drawPlaster(ctx, size, room.wallColor),
-    Math.max(4, room.length / 3),
-    2,
-  ),
-);
-const roomEndWallTextures = rooms.map((room) =>
-  makeCanvasTexture((ctx, size) => drawPlaster(ctx, size, room.wallColor), 6, 2),
-);
-
-function RietveldExterior() {
-  return <group position={[-7.2, 0, 6.8]}>
-    {/* Grande volume branco curvo à esquerda da referência */}
-    <mesh position={[0, 6, 0]} scale={[7.25, 1, 4.75]} castShadow>
-      <cylinderGeometry args={[1, 1, 12, 56]} />
-      <meshStandardMaterial color={concreteTexture ? "#ffffff" : "#dedbd4"} map={concreteTexture ?? undefined} roughness={0.82} />
-    </mesh>
-    {/* Lajes salientes superior e inferior */}
-    <mesh position={[0, 12.1, 0]} scale={[7.7, 1, 5.08]} castShadow>
-      <cylinderGeometry args={[1, 1, 0.38, 56]} />
-      <meshStandardMaterial color="#f1eee7" roughness={0.68} />
-    </mesh>
-    <mesh position={[0, 0.22, 0]} scale={[7.45, 1, 4.9]}>
-      <cylinderGeometry args={[1, 1, 0.4, 56]} />
-      <meshStandardMaterial color="#c5c2bc" roughness={0.86} />
-    </mesh>
-    {/* Faixa de vidro junto à cobertura */}
-    <mesh position={[0, 10.95, 0]} scale={[7.3, 1, 4.8]}>
-      <cylinderGeometry args={[1.01, 1.01, 1.15, 56, 1, true]} />
-      <meshStandardMaterial color="#174a64" transparent opacity={0.78} metalness={0.48} roughness={0.14} />
-    </mesh>
-    {/* Janela retangular frontal do volume curvo */}
-    <mesh position={[1.1, 4.1, 4.78]}>
-      <planeGeometry args={[3.8, 3]} />
-      <meshStandardMaterial color="#2482aa" metalness={0.38} roughness={0.12} />
-    </mesh>
-    {[-0.15, 0.9, 1.95, 3].map((x) => <mesh key={x} position={[x, 4.1, 4.84]}><boxGeometry args={[0.055, 3.05, 0.06]} /><meshStandardMaterial color="#163e55" /></mesh>)}
-    {[3.1, 4.1, 5.1].map((y) => <mesh key={y} position={[1.42, y, 4.84]}><boxGeometry args={[3.85, 0.055, 0.06]} /><meshStandardMaterial color="#163e55" /></mesh>)}
-  </group>;
-}
-
-function BrickWing() {
-  return <group position={[9.2, 0, 6]}>
-    {/* Edifício de tijolos à direita */}
-    <mesh position={[0, 5.5, 0]} castShadow>
-      <boxGeometry args={[10.6, 11, 11]} />
-      <meshStandardMaterial color={yellowBrickTexture ? "#ffffff" : "#cf9552"} map={yellowBrickTexture ?? undefined} roughness={0.9} />
-    </mesh>
-    {/* Faixas claras entre os pavimentos */}
-    {[2.2, 5.25].map((y) => <mesh key={y} position={[0, y, 5.56]}>
-      <boxGeometry args={[10.8, 0.34, 0.18]} />
-      <meshStandardMaterial color="#e6ded0" roughness={0.78} />
-    </mesh>)}
-    {/* Janelas frontais */}
-    {[-3.7, -1.25, 1.25, 3.7].map((x) => <mesh key={x} position={[x, 3.55, 5.58]}>
-      <planeGeometry args={[1.75, 2.15]} />
-      <meshStandardMaterial color="#167da9" metalness={0.38} roughness={0.12} />
-    </mesh>)}
-    <mesh position={[2.6, 7.9, 5.58]}>
-      <planeGeometry args={[2.4, 3.1]} />
-      <meshStandardMaterial color="#238eb8" metalness={0.38} roughness={0.12} />
-    </mesh>
-    {/* Caixa técnica superior */}
-    <mesh position={[-1.6, 11.8, -0.5]}><boxGeometry args={[5.2, 1.6, 6.4]} /><meshStandardMaterial color="#4b565d" roughness={0.62} /></mesh>
-  </group>;
-}
-
-function SunflowerPlanter({ x }: { x: number }) {
-  return <group position={[x, 0, 16.5]}>
-    <mesh position={[0, 0.34, 0]} castShadow><boxGeometry args={[2.2, 0.68, 0.72]} /><meshStandardMaterial color="#6f706a" roughness={0.9} /></mesh>
-    {[-0.72, -0.24, 0.24, 0.72].map((offset, index) => <group key={offset} position={[offset, 0.68, 0]}>
-      <mesh position={[0, 0.7 + (index % 2) * 0.18, 0]}><cylinderGeometry args={[0.018, 0.028, 1.4, 7]} /><meshStandardMaterial color="#3f6a42" /></mesh>
-      <mesh position={[0, 1.42 + (index % 2) * 0.18, 0]}><sphereGeometry args={[0.2, 12, 8]} /><meshStandardMaterial color="#e1ad24" roughness={0.85} /></mesh>
-      <mesh position={[0, 1.42 + (index % 2) * 0.18, 0.18]}><sphereGeometry args={[0.085, 10, 7]} /><meshStandardMaterial color="#68451d" roughness={1} /></mesh>
-    </group>)}
-  </group>;
-}
-
-function Bicycle({ position }: { position: [number, number, number] }) {
-  return <group position={position} scale={0.9}>
-    {[-0.7, 0.7].map((x) => <mesh key={x} position={[x, 0.62, 0]}>
-      <torusGeometry args={[0.52, 0.055, 10, 22]} />
-      <meshStandardMaterial color="#19242a" metalness={0.58} roughness={0.38} />
-    </mesh>)}
-    <mesh position={[-0.1, 0.86, 0]} rotation={[0, 0, 0.58]}><boxGeometry args={[1.15, 0.065, 0.065]} /><meshStandardMaterial color="#1b596f" metalness={0.72} /></mesh>
-    <mesh position={[0.18, 0.9, 0]} rotation={[0, 0, -0.55]}><boxGeometry args={[1.05, 0.065, 0.065]} /><meshStandardMaterial color="#1b596f" metalness={0.72} /></mesh>
-    <mesh position={[0.03, 0.73, 0]} rotation={[0, 0, Math.PI / 2]}><boxGeometry args={[0.74, 0.065, 0.065]} /><meshStandardMaterial color="#1b596f" metalness={0.72} /></mesh>
-    <mesh position={[0.38, 1.44, 0]} rotation={[0, 0, -0.15]}><boxGeometry args={[0.7, 0.055, 0.055]} /><meshStandardMaterial color="#26343a" metalness={0.7} /></mesh>
-    <mesh position={[0.06, 1.26, 0]}><boxGeometry args={[0.52, 0.12, 0.25]} /><meshStandardMaterial color="#40332a" roughness={0.72} /></mesh>
-  </group>;
-}
-
-function TulipBed() {
-  const colors = ["#ef3b24", "#f18bb5", "#f2b827", "#c84b8d", "#ff6841"];
-  return <group position={[10.8, 0, 24]}>
-    <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[13, 6]} /><meshStandardMaterial color="#315d34" roughness={1} /></mesh>
-    {Array.from({ length: 36 }, (_, index) => {
-      const x = -5.7 + (index % 9) * 1.42;
-      const z = -2.2 + Math.floor(index / 9) * 1.35;
-      const height = 0.72 + (index % 3) * 0.12;
-      return <group key={index} position={[x, 0, z]}>
-        <mesh position={[0, height / 2, 0]}><cylinderGeometry args={[0.018, 0.028, height, 6]} /><meshStandardMaterial color="#3b813f" /></mesh>
-        <mesh position={[-0.12, height * 0.52, 0]} rotation={[0, 0, 0.55]}><capsuleGeometry args={[0.055, 0.22, 4, 6]} /><meshStandardMaterial color="#4c9b4d" /></mesh>
-        <mesh position={[0, height + 0.12, 0]} scale={[0.85, 1, 0.85]}><sphereGeometry args={[0.2, 12, 8]} /><meshStandardMaterial color={colors[index % colors.length]} roughness={0.8} /></mesh>
-      </group>;
-    })}
-  </group>;
-}
-
-function StreetLamp() {
-  return <group position={[6.8, 0, 20.5]}>
-    <mesh position={[0, 2.5, 0]} castShadow><cylinderGeometry args={[0.09, 0.16, 5, 10]} /><meshStandardMaterial color="#182128" metalness={0.72} roughness={0.28} /></mesh>
-    <mesh position={[0, 5.05, 0]}><boxGeometry args={[0.7, 0.95, 0.7]} /><meshStandardMaterial color="#182128" metalness={0.72} roughness={0.25} wireframe /></mesh>
-    <pointLight position={[0, 5.05, 0]} intensity={3.5} distance={8} color="#ffd680" />
-    <mesh position={[0, 5.65, 0]}><coneGeometry args={[0.55, 0.3, 4]} /><meshStandardMaterial color="#182128" metalness={0.72} /></mesh>
-  </group>;
-}
-
-function CanalAndBikes() {
-  return <group>
-    <mesh position={[-18, -0.06, 22]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[9, 26]} /><meshStandardMaterial color="#188dc0" metalness={0.22} roughness={0.18} /></mesh>
-    <mesh position={[-13.35, 0.22, 22]}><boxGeometry args={[0.45, 0.44, 26]} /><meshStandardMaterial color="#765d48" roughness={0.88} /></mesh>
-    <Bicycle position={[-11.8, 0, 23.5]} />
-    <Bicycle position={[-10.4, 0, 25]} />
-  </group>;
-}
-
-function LargeTree() {
-  return <group position={[18, 0, 17]}>
-    <mesh position={[0, 4.5, 0]} castShadow><cylinderGeometry args={[0.48, 0.85, 9, 12]} /><meshStandardMaterial color="#654326" roughness={0.96} /></mesh>
-    {[[-2.2, 8.4, 0], [1.6, 9, 0.2], [-0.3, 10.2, -0.2], [3.2, 8.2, 0]].map((position, index) => <mesh key={index} position={position as [number, number, number]} scale={[1.8, 1.15, 1.5]} castShadow><sphereGeometry args={[2.2, 14, 10]} /><meshStandardMaterial color={index % 2 ? "#6f9d35" : "#83b43e"} roughness={1} /></mesh>)}
-  </group>;
-}
-
-function PlazaDetails() {
-  return <group>
-    {/* Escadaria de acesso à entrada */}
-    <mesh position={[0, 0.09, 15.35]} castShadow receiveShadow><boxGeometry args={[8.4, 0.18, 1.1]} /><meshStandardMaterial color="#c9c2b6" roughness={0.9} /></mesh>
-    <mesh position={[0, 0.045, 15.95]} castShadow receiveShadow><boxGeometry args={[9.2, 0.09, 1.2]} /><meshStandardMaterial color="#bdb5a8" roughness={0.9} /></mesh>
-
-    {/* Guarda-corpo do canal */}
-    {Array.from({ length: 14 }, (_, index) => (
-      <mesh key={index} position={[-13.05, 0.5, 9.5 + index * 2]} castShadow>
-        <cylinderGeometry args={[0.035, 0.035, 1.05, 8]} />
-        <meshStandardMaterial color="#24443c" metalness={0.6} roughness={0.4} />
-      </mesh>
-    ))}
-    <mesh position={[-13.05, 0.98, 22]}><boxGeometry args={[0.07, 0.07, 26]} /><meshStandardMaterial color="#24443c" metalness={0.6} roughness={0.4} /></mesh>
-    <mesh position={[-13.05, 0.62, 22]}><boxGeometry args={[0.05, 0.05, 26]} /><meshStandardMaterial color="#2c5248" metalness={0.6} roughness={0.4} /></mesh>
-
-    {/* Totem de sinalização */}
-    <group position={[5.6, 0, 18.2]} rotation={[0, -0.5, 0]}>
-      <mesh position={[0, 0.8, 0]} castShadow><boxGeometry args={[1.5, 1.6, 0.14]} /><meshStandardMaterial color="#101418" roughness={0.5} /></mesh>
-      <mesh position={[0, 1.15, 0.08]}><planeGeometry args={[1.2, 0.16]} /><meshStandardMaterial color="#f2efe6" /></mesh>
-      <mesh position={[0, 0.85, 0.08]}><planeGeometry args={[1.2, 0.1]} /><meshStandardMaterial color="#f2b827" /></mesh>
-    </group>
-
-    {/* Mobiliário e pessoas na praça */}
-    <MuseumBench position={[14.5, 0, 20.5]} rotationY={Math.PI / 2} />
-    <Suspense fallback={null}>
-      <Visitor position={[2.8, 0, 19]} rotationY={-Math.PI} modelIndex={5} seed={901} />
-      <Visitor position={[-3.4, 0, 21]} rotationY={-Math.PI + 0.5} modelIndex={2} seed={1204} />
-    </Suspense>
-  </group>;
-}
 
 function TransitionCorridor() {
   const length = BUILDING_PORTAL_Z - FIRST_ROOM_Z;
   const centerZ = (BUILDING_PORTAL_Z + FIRST_ROOM_Z) / 2;
+  const corridorParquet = useChevronParquet(3, Math.round(length * 0.55));
   return <group>
     <mesh position={[0, 0.03, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
       <planeGeometry args={[4.6, length]} />
-      <meshStandardMaterial color="#596a75" roughness={0.7} />
+      <meshStandardMaterial
+        map={corridorParquet?.map}
+        bumpMap={corridorParquet?.bumpMap}
+        bumpScale={0.032}
+        color="#f2dfc6"
+        roughness={0.62}
+      />
     </mesh>
     <mesh position={[-2.45, 2.3, centerZ]}>
       <boxGeometry args={[0.3, 4.6, length]} />
-      <meshStandardMaterial color="#e7e1d6" roughness={0.9} />
+      <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
     <mesh position={[2.45, 2.3, centerZ]}>
       <boxGeometry args={[0.3, 4.6, length]} />
-      <meshStandardMaterial color="#e7e1d6" roughness={0.9} />
+      <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+    </mesh>
+    {/* Rodapés do corredor */}
+    <mesh position={[-2.28, 0.11, centerZ]}>
+      <boxGeometry args={[0.04, 0.16, length]} />
+      <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+    </mesh>
+    <mesh position={[2.28, 0.11, centerZ]}>
+      <boxGeometry args={[0.04, 0.16, length]} />
+      <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
     </mesh>
     <mesh position={[0, 4.6, centerZ]}>
       <boxGeometry args={[4.9, 0.2, length]} />
-      <meshStandardMaterial color="#d6d1c8" roughness={0.85} />
+      <meshStandardMaterial color={MUSEUM_CEILING_COLOR} roughness={0.88} />
     </mesh>
     {[1.2, 4.3, 7.4].map((offset) => <mesh key={offset} position={[0, 4.43, FIRST_ROOM_Z + offset]}>
       <boxGeometry args={[2.8, 0.08, 0.36]} />
       <meshStandardMaterial color="#fff2cf" emissive="#ffe2a0" emissiveIntensity={1.25} toneMapped={false} />
     </mesh>)}
     <pointLight position={[0, 4.1, centerZ]} intensity={24} distance={12} color="#ffe8bb" />
+
+    {/* Murais contemporâneos com fotos e frases de Van Gogh */}
+    <CorridorMurals />
   </group>;
 }
 
@@ -1518,74 +1207,35 @@ function MuseumArchitecture({
   entranceOpen,
   internalDoorsOpen,
   doorRegistry,
-  isMobile,
 }: {
   entranceOpen: boolean;
   internalDoorsOpen: boolean[];
   doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
-  isMobile: boolean;
 }) {
   return <group>
     <Sky distance={4000} sunPosition={[-35, 42, 25]} turbidity={5} rayleigh={0.35} mieCoefficient={0.005} mieDirectionalG={0.8} />
     <fog attach="fog" args={["#cfe4f4", 130, 230]} />
-    <Environment resolution={64} frames={1}>
+    <Environment resolution={128} frames={1}>
       <Lightformer intensity={1.4} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[12, 12, 1]} color="#eaf4ff" />
       <Lightformer intensity={0.9} rotation-y={Math.PI / 2} position={[-8, 2, 0]} scale={[8, 3, 1]} color="#fff2da" />
       <Lightformer intensity={0.7} rotation-y={-Math.PI / 2} position={[8, 2, 0]} scale={[8, 3, 1]} color="#dfeaff" />
       <Lightformer intensity={0.5} position={[0, 2, -9]} scale={[10, 3, 1]} color="#cfd8e2" />
     </Environment>
-    <ambientLight intensity={0.55} color="#e5f3ff" />
-    <hemisphereLight intensity={0.75} color="#dff2ff" groundColor="#6d755a" />
-    <directionalLight
-      position={[-35, 42, 25]}
-      intensity={2.8}
-      color="#fff2d0"
-      castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
-      shadow-camera-left={-50}
-      shadow-camera-right={50}
-      shadow-camera-top={50}
-      shadow-camera-bottom={-50}
-      shadow-camera-far={140}
-      shadow-bias={-0.0004}
-    />
+    <ExteriorDaylight />
     <pointLight position={[0, 5, 15]} intensity={11} distance={22} color="#fff0ce" />
 
-    {/* Praça externa com pavimento de tijolos */}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.025, 22]} receiveShadow>
-      <planeGeometry args={[48, 30]} />
-      <meshStandardMaterial color={plazaTexture ? "#ffffff" : "#bd7956"} map={plazaTexture ?? undefined} roughness={0.96} />
-    </mesh>
-
-    {/* Gramado do Museumplein nas laterais do eixo de entrada */}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-20.5, -0.012, 25]} receiveShadow><planeGeometry args={[7, 26]} /><meshStandardMaterial color="#70a34d" roughness={1} /></mesh>
-
-    <RietveldExterior />
-    <BrickWing />
-    <GlassPavilion />
+    <MuseumExterior />
+    <ExteriorLandscape />
+    <Suspense fallback={null}>
+      <ExteriorVisitors />
+    </Suspense>
     <SlidingDoors z={ENTRANCE_DOOR_Z} open={entranceOpen} register={doorRegistry} entrance />
     <TransitionCorridor />
-    <SunflowerPlanter x={-4.2} />
-    <SunflowerPlanter x={4.2} />
-    <Html position={[0, 5.25, ENTRANCE_DOOR_Z + 0.1]} center transform distanceFactor={9} style={{ pointerEvents: "none" }}>
-      <div style={{ color: "#17202a", background: "rgba(245,242,233,.92)", padding: "8px 18px", fontFamily: "Georgia, serif", fontSize: 21, letterSpacing: 1.5, whiteSpace: "nowrap", boxShadow: "0 4px 14px rgba(0,0,0,.18)" }}>
-        van gogh museum
-      </div>
-    </Html>
 
-    {rooms.map((room, index) => (
-      <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} isMobile={isMobile} />
-    ))}
+    {rooms.map((room, index) => <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} />)}
     {internalDoorBoundaries.map((z, index) => (
       <SlidingDoors key={z} z={z} open={internalDoorsOpen[index]} />
     ))}
-
-    <CanalAndBikes />
-    <TulipBed />
-    <StreetLamp />
-    <LargeTree />
-    <PlazaDetails />
   </group>;
 }
 
@@ -1618,7 +1268,6 @@ export function MuseumScene({
       entranceOpen={entranceOpen}
       internalDoorsOpen={stableInternalDoors}
       doorRegistry={doorRegistry}
-      isMobile={isMobile}
     />
     <GalleryControls
       active={active}

@@ -1,0 +1,13 @@
+Exterior visitor asset: "Casual Character" by Quaternius.
+
+Source: https://poly.pizza/m/kZ3DmIoGip
+Direct asset: https://static.poly.pizza/90a9e2d4-053f-42f1-99a2-8f5e1180ea7f.glb
+Downloaded: 2026-09-19
+
+License: Creative Commons CC0 1.0 Universal (Public Domain Dedication).
+Source page identifies the model as "Casual Character", author Quaternius,
+and license "Public Domain (CC0)". CC0 legal text:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The asset is retained as exterior-visitor.glb only. It does not replace the
+separate visitor.glb asset used by the museum interior.
