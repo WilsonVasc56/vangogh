@@ -12,15 +12,11 @@ import {
   type MutableRefObject,
 } from "react";
 import * as THREE from "three";
-import { artworks, type Artwork } from "@/data/artworks";
-import { periods, type PeriodId } from "@/data/periods";
-import { GalleryArtwork, type ArtworkSlot } from "./gallery-artwork";
-import { EXTERIOR_GLASS_SEGMENTS, ExteriorDaylight, MuseumExterior } from "./museum-exterior";
-import {
-  EXTERIOR_GARDEN_BOUNDS,
-  EXTERIOR_TREE_TRUNKS,
-  ExteriorLandscape,
-} from "./exterior-landscape";
+import type { Artwork } from "@/data/artworks";
+import type { PeriodId } from "@/data/periods";
+import { GalleryArtwork } from "./gallery-artwork";
+import { ExteriorDaylight, MuseumExterior } from "./museum-exterior";
+import { ExteriorLandscape } from "./exterior-landscape";
 import { ExteriorVisitors } from "./exterior-visitors";
 import {
   MUSEUM_WALL_COLOR,
@@ -30,6 +26,18 @@ import {
 } from "./interior-materials";
 import { MuseumArtPiece, type VaseVariant } from "./museum-vases";
 import { CorridorMurals } from "./corridor-murals";
+import { CAFE_PEOPLE, MuseumCafe } from "./museum-cafe";
+import {
+  BUILDING_PORTAL_Z,
+  DOOR_HALF_WIDTH,
+  ENTRANCE_DOOR_Z,
+  FIRST_ROOM_Z,
+  PLAYER_RADIUS,
+  ROOM_HALF_WIDTH,
+  ROOM_HEIGHT,
+} from "./scene/constants";
+import { artworkSlots, internalDoorBoundaries, rooms, type RoomConfig } from "./scene/rooms";
+import { resolveExteriorMovement, resolveRoomDecorMovement } from "./scene/collisions";
 
 interface MuseumSceneProps {
   active: boolean;
@@ -53,277 +61,6 @@ export interface MobileInput {
 const debugFreeRoam =
   typeof window !== "undefined" && window.location.hash === "#debug-walk";
 
-interface RoomConfig {
-  id: PeriodId;
-  name: string;
-  years: string;
-  startZ: number;
-  endZ: number;
-  centerZ: number;
-  length: number;
-  wallColor: string;
-  floorColor: string;
-  accent: string;
-  items: Artwork[];
-}
-
-const ENTRANCE_DOOR_Z = 14.8;
-const BUILDING_PORTAL_Z = 8.55;
-const FIRST_ROOM_Z = -1.5;
-const ROOM_HALF_WIDTH = 8.5;
-const ROOM_HEIGHT = 6.5;
-const DOOR_HALF_WIDTH = 1.65;
-const BACK_WALL_OUTER_MARGIN = ROOM_HALF_WIDTH * 0.12;
-const BACK_WALL_DOOR_MARGIN = ROOM_HALF_WIDTH * 0.09;
-const BACK_WALL_ARTWORK_PITCH = 2.4;
-const BACK_WALL_ARTWORK_OFFSET = 0.27;
-
-const roomStyles = [
-  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#b39772" },
-  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#78a3b8" },
-  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#e3a83f" },
-  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#6d98ab" },
-  { wallColor: MUSEUM_WALL_COLOR, floorColor: "#cca97c", accent: "#94a75d" },
-];
-
-const roomOrder: PeriodId[] = ["nuenen", "paris", "arles", "saint-remy", "auvers"];
-
-function createRooms(): RoomConfig[] {
-  let cursor = FIRST_ROOM_Z;
-  return roomOrder.map((id, index) => {
-    const period = periods.find((item) => item.id === id)!;
-    const items = artworks
-      .filter((artwork) => artwork.periodo === id)
-      .sort((a, b) => a.ano - b.ano);
-    const rows = Math.ceil(items.length / 2);
-    const length = Math.max(12, rows * 2.25 + 4.5);
-    const startZ = cursor;
-    const endZ = startZ - length;
-    cursor = endZ;
-    return {
-      id,
-      name: period.nome,
-      years: period.anos,
-      startZ,
-      endZ,
-      centerZ: (startZ + endZ) / 2,
-      length,
-      items,
-      ...roomStyles[index],
-    };
-  });
-}
-
-const rooms = createRooms();
-const internalDoorBoundaries = rooms.slice(0, -1).map((room) => room.endZ);
-
-interface WallSegment {
-  startX: number;
-  endX: number;
-}
-
-function distributeArtworkPositions(segment: WallSegment) {
-  const width = segment.endX - segment.startX;
-  const count = Math.max(1, Math.floor(width / BACK_WALL_ARTWORK_PITCH));
-  const spacing = width / count;
-  return Array.from(
-    { length: count },
-    (_, index) => segment.startX + spacing * (index + 0.5),
-  );
-}
-
-function createBackWallPositions(last: boolean) {
-  const outerLeft = -ROOM_HALF_WIDTH + BACK_WALL_OUTER_MARGIN;
-  const outerRight = ROOM_HALF_WIDTH - BACK_WALL_OUTER_MARGIN;
-  const segments: WallSegment[] = last
-    ? [{ startX: outerLeft, endX: outerRight }]
-    : [
-        {
-          startX: outerLeft,
-          endX: -DOOR_HALF_WIDTH - BACK_WALL_DOOR_MARGIN,
-        },
-        {
-          startX: DOOR_HALF_WIDTH + BACK_WALL_DOOR_MARGIN,
-          endX: outerRight,
-        },
-      ];
-
-  return segments.flatMap(distributeArtworkPositions);
-}
-
-function getSideArtworkCount(room: RoomConfig) {
-  const last = room.id === roomOrder.at(-1);
-  return Math.max(0, room.items.length - createBackWallPositions(last).length);
-}
-
-function createArtworkSlots(): ArtworkSlot[] {
-  return rooms.flatMap((room) => {
-    const last = room.id === roomOrder.at(-1);
-    const backWallPositions = createBackWallPositions(last);
-    const sideArtworkCount = getSideArtworkCount(room);
-    const sideSlots = room.items.slice(0, sideArtworkCount).map((artwork, index) => {
-      const leftWall = index % 2 === 0;
-      const row = Math.floor(index / 2);
-      return {
-        artwork,
-        // Origem no piso; o componente pendura a tela na linha de olhar (1,55 m).
-        position: [
-          leftWall ? -ROOM_HALF_WIDTH + 0.28 : ROOM_HALF_WIDTH - 0.28,
-          0,
-          room.startZ - 2.7 - row * 2.25,
-        ],
-        rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
-      } as ArtworkSlot;
-    });
-    const backSlots = room.items.slice(sideArtworkCount).map((artwork, index) => ({
-      artwork,
-      position: [
-        backWallPositions[index],
-        0,
-        room.endZ + BACK_WALL_ARTWORK_OFFSET,
-      ],
-      rotation: [0, 0, 0],
-    }) satisfies ArtworkSlot);
-
-    return [...sideSlots, ...backSlots];
-  });
-}
-
-const artworkSlots = createArtworkSlots();
-
-const PLAYER_RADIUS = 0.42;
-
-interface CollisionBox {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
-
-interface CollisionEllipse {
-  x: number;
-  z: number;
-  radiusX: number;
-  radiusZ: number;
-}
-
-interface CollisionSegment {
-  ax: number;
-  az: number;
-  bx: number;
-  bz: number;
-}
-
-const exteriorBoxes: CollisionBox[] = [
-  { minX: 8.2, maxX: 20, minZ: -0.9, maxZ: 8.9 },
-  { minX: 7.5, maxX: 10.7, minZ: 7.55, maxZ: 7.8 },
-  { minX: -2.4, maxX: -2.24, minZ: 12.32, maxZ: 14.12 },
-  { minX: 2.24, maxX: 2.4, minZ: 12.32, maxZ: 14.12 },
-  ...EXTERIOR_GARDEN_BOUNDS,
-  { minX: -12.9, maxX: -10.1, minZ: 18.5, maxZ: 19.3 },
-  { minX: 12.4, maxX: 15.2, minZ: 18.5, maxZ: 19.3 },
-  { minX: -13.5, maxX: -11.5, minZ: 23.5, maxZ: 29.3 },
-  { minX: -14.08, maxX: -13.92, minZ: 20.42, maxZ: 20.58 },
-  { minX: 17.72, maxX: 17.88, minZ: 20.42, maxZ: 20.58 },
-];
-
-const exteriorEllipses: CollisionEllipse[] = [
-  { x: -8.8, z: 5.5, radiusX: 6.5, radiusZ: 5.8 },
-  ...EXTERIOR_TREE_TRUNKS.map(({ x, z, radius }) => ({
-    x,
-    z,
-    radiusX: radius,
-    radiusZ: radius,
-  })),
-];
-
-const glassWallSegments: CollisionSegment[] = [
-  ...EXTERIOR_GLASS_SEGMENTS,
-  // Fitas da fila: colidir com cada vão impede atravessá-las lateralmente.
-  ...[2.1, 4.15].flatMap((x) => [
-    { ax: x, az: 17.4, bx: x, bz: 20.6 },
-  ]),
-];
-
-const roomDecorBoxes: CollisionBox[] = rooms.flatMap((room) => [
-  // Vasos sobre pedestais
-  { minX: -7.2, maxX: -6.1, minZ: room.startZ - 1.7, maxZ: room.startZ - 0.6 },
-  { minX: 6.1, maxX: 7.2, minZ: room.endZ + 0.7, maxZ: room.endZ + 1.8 },
-  // Banco central rotacionado em 90 graus
-  { minX: -0.52, maxX: 0.52, minZ: room.centerZ - 1.85, maxZ: room.centerZ + 1.85 },
-]);
-
-function circleHitsBox(x: number, z: number, box: CollisionBox) {
-  const closestX = THREE.MathUtils.clamp(x, box.minX, box.maxX);
-  const closestZ = THREE.MathUtils.clamp(z, box.minZ, box.maxZ);
-  const dx = x - closestX;
-  const dz = z - closestZ;
-  return dx * dx + dz * dz < PLAYER_RADIUS * PLAYER_RADIUS;
-}
-
-function circleHitsEllipse(x: number, z: number, ellipse: CollisionEllipse) {
-  const nx = (x - ellipse.x) / (ellipse.radiusX + PLAYER_RADIUS);
-  const nz = (z - ellipse.z) / (ellipse.radiusZ + PLAYER_RADIUS);
-  return nx * nx + nz * nz < 1;
-}
-
-function circleHitsSegment(x: number, z: number, segment: CollisionSegment) {
-  const abX = segment.bx - segment.ax;
-  const abZ = segment.bz - segment.az;
-  const lengthSquared = abX * abX + abZ * abZ;
-  const projection = THREE.MathUtils.clamp(
-    ((x - segment.ax) * abX + (z - segment.az) * abZ) / lengthSquared,
-    0,
-    1,
-  );
-  const closestX = segment.ax + abX * projection;
-  const closestZ = segment.az + abZ * projection;
-  const dx = x - closestX;
-  const dz = z - closestZ;
-  return dx * dx + dz * dz < PLAYER_RADIUS * PLAYER_RADIUS;
-}
-
-function collidesWithExterior(x: number, z: number) {
-  // O exterior só interfere antes da primeira sala; dentro dela vale a planta interna.
-  if (z < FIRST_ROOM_Z - 0.25) return false;
-  return (
-    exteriorBoxes.some((box) => circleHitsBox(x, z, box)) ||
-    exteriorEllipses.some((ellipse) => circleHitsEllipse(x, z, ellipse)) ||
-    glassWallSegments.some((segment) => circleHitsSegment(x, z, segment))
-  );
-}
-
-function collidesWithRoomDecor(x: number, z: number) {
-  return roomDecorBoxes.some((box) => circleHitsBox(x, z, box));
-}
-
-function resolveExteriorMovement(
-  previousX: number,
-  previousZ: number,
-  desiredX: number,
-  desiredZ: number,
-) {
-  let x = desiredX;
-  let z = previousZ;
-  if (collidesWithExterior(x, z)) x = previousX;
-  z = desiredZ;
-  if (collidesWithExterior(x, z)) z = previousZ;
-  return { x, z };
-}
-
-function resolveRoomDecorMovement(
-  previousX: number,
-  previousZ: number,
-  desiredX: number,
-  desiredZ: number,
-) {
-  let x = desiredX;
-  let z = previousZ;
-  if (collidesWithRoomDecor(x, z)) x = previousX;
-  z = desiredZ;
-  if (collidesWithRoomDecor(x, z)) z = previousZ;
-  return { x, z };
-}
 
 function GalleryControls({
   active,
@@ -362,6 +99,8 @@ function GalleryControls({
   const raycaster = useRef(new THREE.Raycaster());
   const currentRoom = useRef<PeriodId | null>(null);
   const processedInteraction = useRef(interactionToken);
+  // Última leitura do "olhar" do toque, para consumir apenas as deltas.
+  const consumedLook = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -428,16 +167,23 @@ function GalleryControls({
     registry,
   ]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
+    // O estado do frame é a fonte mutável correta: `useThree()` devolve valor de
+    // hook, que o React Compiler trata como imutável.
+    const camera = state.camera;
+    const canvas = state.gl.domElement;
     if (isMobile) {
-      yaw.current -= mobileInput.current.lookX * 0.003;
+      // Consome as deltas do buffer compartilhado sem escrever de volta: mobileInput
+      // é um prop, e mutá-lo é proibido pelas regras de hooks do React Compiler.
+      const look = mobileInput.current;
+      yaw.current -= (look.lookX - consumedLook.current.x) * 0.003;
       pitch.current = THREE.MathUtils.clamp(
-        pitch.current - mobileInput.current.lookY * 0.003,
+        pitch.current - (look.lookY - consumedLook.current.y) * 0.003,
         -1.2,
         1.2,
       );
-      mobileInput.current.lookX = 0;
-      mobileInput.current.lookY = 0;
+      consumedLook.current.x = look.lookX;
+      consumedLook.current.y = look.lookY;
 
       if (interactionToken !== processedInteraction.current) {
         processedInteraction.current = interactionToken;
@@ -449,7 +195,7 @@ function GalleryControls({
         if (artwork) onArtworkSelect(artwork);
       }
     }
-    if (debugFreeRoam && document.pointerLockElement !== gl.domElement) {
+    if (debugFreeRoam && document.pointerLockElement !== canvas) {
       // Olhar sem pointer lock em automação/QA.
       if (keys.current.has("KeyQ")) yaw.current += delta * 1.8;
       if (keys.current.has("KeyE")) yaw.current -= delta * 1.8;
@@ -471,7 +217,7 @@ function GalleryControls({
       onRoomChange(nextRoom);
     }
 
-    if (!active || (!isMobile && !debugFreeRoam && document.pointerLockElement !== gl.domElement)) return;
+    if (!active || (!isMobile && !debugFreeRoam && document.pointerLockElement !== canvas)) return;
 
     const forward = new THREE.Vector2(-Math.sin(yaw.current), -Math.cos(yaw.current));
     const strafe = new THREE.Vector2(Math.cos(yaw.current), -Math.sin(yaw.current));
@@ -577,11 +323,15 @@ function SlidingDoors({
 
   useEffect(() => {
     if (!register) return;
-    if (leftPanel.current) register.current.add(leftPanel.current);
-    if (rightPanel.current) register.current.add(rightPanel.current);
+    // Copia refs e registry para locais: o valor de .current pode mudar antes do
+    // cleanup rodar, e o registry pode ser outro objeto no momento da limpeza.
+    const registry = register.current;
+    const panels = [leftPanel.current, rightPanel.current].filter(
+      (panel): panel is THREE.Mesh => panel !== null,
+    );
+    panels.forEach((panel) => registry.add(panel));
     return () => {
-      if (leftPanel.current) register.current.delete(leftPanel.current);
-      if (rightPanel.current) register.current.delete(rightPanel.current);
+      panels.forEach((panel) => registry.delete(panel));
     };
   }, [register]);
 
@@ -625,82 +375,6 @@ function EntranceDoorFrame() {
     {[0.05, 3.75].map((y) => <mesh key={y} position={[0, y, 0.075]}>
       <boxGeometry args={[1.8, 0.065, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
     </mesh>)}
-  </group>;
-}
-
-function glassRoofHeight(x: number) {
-  return 6.3 + 2.7 * Math.exp(-(x * x) / 8.5) + x * 0.07;
-}
-
-function WaveGlassRoof() {
-  const geometry = useMemo(() => {
-    const points = Array.from({ length: 13 }, (_, index) => -6 + index);
-    const vertices: number[] = [];
-    for (let index = 0; index < points.length - 1; index++) {
-      const x1 = points[index];
-      const x2 = points[index + 1];
-      const y1 = glassRoofHeight(x1);
-      const y2 = glassRoofHeight(x2);
-      vertices.push(
-        x1, y1, 9.2, x2, y2, 9.2, x2, y2, 14.25,
-        x1, y1, 9.2, x2, y2, 14.25, x1, y1, 14.25,
-      );
-    }
-    const result = new THREE.BufferGeometry();
-    result.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    result.computeVertexNormals();
-    return result;
-  }, []);
-
-  return <group>
-    <mesh geometry={geometry}>
-      <meshPhysicalMaterial color="#a8d8ee" transparent opacity={0.3} roughness={0.05} metalness={0.05} clearcoat={1} clearcoatRoughness={0.1} envMapIntensity={1.6} side={THREE.DoubleSide} />
-    </mesh>
-    {Array.from({ length: 13 }, (_, index) => {
-      const x = -6 + index;
-      return <mesh key={x} position={[x, glassRoofHeight(x), 11.72]}>
-        <boxGeometry args={[0.075, 0.075, 5.15]} />
-        <meshStandardMaterial color="#164b69" metalness={0.75} roughness={0.18} />
-      </mesh>;
-    })}
-  </group>;
-}
-
-function GlassPavilion() {
-  // O vão central precisa ficar livre: as portas deslizantes ocupam este espaço.
-  // Deixa 7,2m de vão sem montantes: nenhum vidro fixo fica na frente da porta.
-  const frontPanels = [-5.4, -4.2, 4.2, 5.4];
-  const doorOpeningHalfWidth = 3.6;
-  return <group>
-    {/* Grande fachada de vidro central, como na referência enviada */}
-    {frontPanels.map((x) => {
-      const height = glassRoofHeight(x) - 0.25;
-      return <group key={x} position={[x, height / 2, 14.18]}>
-        <mesh><boxGeometry args={[1.16, height, 0.075]} /><meshPhysicalMaterial color="#9fd4ec" transparent opacity={0.32} roughness={0.06} metalness={0.05} clearcoat={1} clearcoatRoughness={0.08} envMapIntensity={1.7} /></mesh>
-        <mesh position={[-0.58, 0, 0.06]}><boxGeometry args={[0.07, height + 0.05, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.85} roughness={0.3} envMapIntensity={1.2} /></mesh>
-      </group>;
-    })}
-    {[1.55, 3.1, 4.65, 6.2].map((y) => <group key={y}>
-      <mesh position={[-(6 - doorOpeningHalfWidth) / 2 - doorOpeningHalfWidth, y, 14.24]}>
-        <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
-        <meshStandardMaterial color="#174c68" metalness={0.85} roughness={0.3} envMapIntensity={1.2} />
-      </mesh>
-      <mesh position={[(6 - doorOpeningHalfWidth) / 2 + doorOpeningHalfWidth, y, 14.24]}>
-        <boxGeometry args={[6 - doorOpeningHalfWidth, 0.07, 0.08]} />
-        <meshStandardMaterial color="#174c68" metalness={0.85} roughness={0.3} envMapIntensity={1.2} />
-      </mesh>
-    </group>)}
-
-    {/* Laterais curvas do átrio */}
-    {[-1.35, -1.08, -0.82, 0.82, 1.08, 1.35].map((angle) => {
-      const x = Math.sin(angle) * 6.3;
-      const z = 11 + Math.cos(angle) * 3.7;
-      return <group key={angle} position={[x, 3.15, z]} rotation={[0, angle, 0]}>
-        <mesh><boxGeometry args={[1.7, 6.3, 0.075]} /><meshPhysicalMaterial color="#9fd4ec" transparent opacity={0.28} roughness={0.06} metalness={0.05} clearcoat={1} clearcoatRoughness={0.08} envMapIntensity={1.7} /></mesh>
-        <mesh position={[-0.82, 0, 0.06]}><boxGeometry args={[0.07, 6.4, 0.08]} /><meshStandardMaterial color="#123f5b" metalness={0.85} roughness={0.3} envMapIntensity={1.2} /></mesh>
-      </group>;
-    })}
-    <WaveGlassRoof />
   </group>;
 }
 
@@ -1231,6 +905,21 @@ function MuseumArchitecture({
     </Suspense>
     <SlidingDoors z={ENTRANCE_DOOR_Z} open={entranceOpen} register={doorRegistry} entrance />
     <TransitionCorridor />
+
+    {/* Café do museu na ala leste do átrio, com barista e clientes */}
+    <MuseumCafe />
+    <Suspense fallback={null}>
+      {CAFE_PEOPLE.map((person) => (
+        <Visitor
+          key={`${person.position[0]}-${person.position[2]}`}
+          position={person.position}
+          rotationY={person.rotationY}
+          tint={person.tint}
+          hair={person.hair}
+          scale={person.scale}
+        />
+      ))}
+    </Suspense>
 
     {rooms.map((room, index) => <Room key={room.id} room={room} index={index} last={index === rooms.length - 1} />)}
     {internalDoorBoundaries.map((z, index) => (
