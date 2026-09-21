@@ -43,6 +43,14 @@ const roomStyles = [
 
 const roomOrder: PeriodId[] = ["nuenen", "paris", "arles", "saint-remy", "auvers"];
 
+const sideArtworkMinimums = {
+  nuenen: 6,
+  paris: 6,
+  arles: 14,
+  "saint-remy": 8,
+  auvers: 8,
+} satisfies Record<PeriodId, number>;
+
 function createRooms(): RoomConfig[] {
   let cursor = FIRST_ROOM_Z;
   return roomOrder.map((id, index) => {
@@ -106,17 +114,19 @@ function createBackWallPositions(last: boolean) {
   return segments.flatMap(distributeArtworkPositions);
 }
 
-function getSideArtworkCount(room: RoomConfig) {
-  const last = room.id === roomOrder.at(-1);
-  return Math.max(0, room.items.length - createBackWallPositions(last).length);
+function getSideArtworks(room: RoomConfig, backArtworkCount: number) {
+  const uniqueSideCount = room.items.length - backArtworkCount;
+  const count = Math.max(uniqueSideCount, sideArtworkMinimums[room.id]);
+  return Array.from({ length: count }, (_, index) => room.items[index % room.items.length]);
 }
 
 function createArtworkSlots(): ArtworkSlot[] {
   return rooms.flatMap((room) => {
     const last = room.id === roomOrder.at(-1);
     const backWallPositions = createBackWallPositions(last);
-    const sideArtworkCount = getSideArtworkCount(room);
-    const sideSlots = room.items.slice(0, sideArtworkCount).map((artwork, index) => {
+    const backArtworkCount = Math.min(room.items.length, backWallPositions.length);
+    const sideArtworks = getSideArtworks(room, backArtworkCount);
+    const sideSlots = sideArtworks.map((artwork, index) => {
       const leftWall = index % 2 === 0;
       const row = Math.floor(index / 2);
       return {
@@ -130,7 +140,7 @@ function createArtworkSlots(): ArtworkSlot[] {
         rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
       } as ArtworkSlot;
     });
-    const backSlots = room.items.slice(sideArtworkCount).map((artwork, index) => ({
+    const backSlots = room.items.slice(-backArtworkCount).map((artwork, index) => ({
       artwork,
       position: [
         backWallPositions[index],

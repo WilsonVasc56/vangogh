@@ -974,7 +974,7 @@ export function MuseumScene({
       onRoomChange={onRoomChange}
     />
     {artworkSlots.map((slot) => (
-      <Suspense fallback={null} key={slot.artwork.slug}>
+      <Suspense fallback={null} key={`${slot.artwork.slug}-${slot.position.join("-")}`}>
         <GalleryArtwork slot={slot} registry={registry} />
       </Suspense>
     ))}
