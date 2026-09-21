@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useCubeCamera } from "@react-three/drei";
 import * as THREE from "three";
+import { AmsterdamBuildings } from "./amsterdam-buildings";
 
 type Point = [number, number, number];
 type Surface = "stone" | "paving" | "brick" | "masonry";
@@ -235,9 +236,10 @@ function GlassEntrance({ reflection }: { reflection: THREE.CubeTexture | null })
     {[-5, -2.7, 2.7, 5].map((x) => <mesh key={x} position={[x, 5.43, 9.3]} rotation={[Math.PI / 2, 0, 0]}>
       <circleGeometry args={[0.09, 12]} /><meshBasicMaterial color="#fff0c8" toneMapped={false} />
     </mesh>)}
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 12]} receiveShadow>
-      <planeGeometry args={[16.2, 6]} />
-      <meshStandardMaterial color="#b8b5a9" roughness={0.7} />
+    {/* Piso interno do átrio: cobre até a parede do fundo (z 7.3) para não expor o terreno */}
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 11.15]} receiveShadow>
+      <planeGeometry args={[16.2, 7.7]} />
+      <meshStandardMaterial color="#c6c3ba" roughness={0.55} />
     </mesh>
   </group>;
 }
@@ -317,35 +319,6 @@ function MuseumVolumes({ reflection }: { reflection: THREE.CubeTexture | null })
       <mesh><boxGeometry args={[3.1, 13.25, 0.08]} /><meshStandardMaterial color="#57696b" envMap={reflection} metalness={0.68} roughness={0.13} /></mesh>
       {[-1.53, 0, 1.53].map((x) => <Beam key={x} from={[x, -6.65, 0.1]} to={[x, 6.65, 0.1]} radius={0.035} />)}
       {[-6.6, -4.4, -2.2, 0, 2.2, 4.4, 6.6].map((y) => <Beam key={y} from={[-1.56, y, 0.1]} to={[1.56, y, 0.1]} radius={0.035} />)}
-    </group>
-  </group>;
-}
-
-function Neighbourhood({ reflection }: { reflection: THREE.CubeTexture | null }) {
-  const brick = useSurface("brick", 2, 3);
-  return <group>
-    {/* Museum-quarter street wall: close setbacks, masonry, tall sash windows. */}
-    {[-1, 1].map((side) => <group key={side} position={[side * 35, 0, 1]} rotation={[0, side * -0.3, 0]}>
-      {Array.from({ length: 4 }, (_, i) => {
-        const height = 12.3 + (i % 3) * 1.1;
-        return <group key={i} position={[(i - 1.5) * 7.1, 0, -Math.abs(i - 1.5) * 0.8]}>
-          <mesh position={[0, height / 2, 0]} castShadow receiveShadow><boxGeometry args={[6.9, height, 8]} /><meshStandardMaterial map={brick?.map} bumpMap={brick?.bump} bumpScale={0.035} color={i % 2 ? "#c4b9a9" : "#a2988e"} roughness={0.94} /></mesh>
-          {[0.45, 3.5, 6.8, 10.1, height].map((y) => <mesh key={y} position={[0, y, 4.12]}><boxGeometry args={[7.05, 0.2, 0.3]} /><meshStandardMaterial color="#c9c1b2" roughness={0.9} /></mesh>)}
-          {[2, 5.2, 8.5, 11.2].filter((y) => y < height - 1).map((y) => [-2.15, 0, 2.15].map((x) => <group key={`${x}-${y}`} position={[x, y, 4.08]}>
-            <mesh><boxGeometry args={[1.4, 2.15, 0.18]} /><meshStandardMaterial color="#d2c9b7" roughness={0.75} /></mesh>
-            <mesh position={[0, 0.02, 0.11]}><planeGeometry args={[1.16, 1.92]} /><meshStandardMaterial envMap={reflection} color={i % 2 ? "#6a7a77" : "#5c6c64"} metalness={0.7} roughness={0.2} /></mesh>
-            <mesh position={[0, 0, 0.14]}><boxGeometry args={[0.045, 1.95, 0.06]} /><meshStandardMaterial color="#cfcabc" /></mesh>
-            <mesh position={[0, 0.18, 0.14]}><boxGeometry args={[1.2, 0.06, 0.06]} /><meshStandardMaterial color="#cfcabc" /></mesh>
-          </group>))}
-          <mesh position={[0, height + 1.25, 0]} rotation={[0, Math.PI / 4, 0]} scale={[1, 1, 1.16]} castShadow><coneGeometry args={[4.95, 2.5, 4]} /><meshStandardMaterial color="#535956" roughness={0.85} /></mesh>
-          <mesh position={[2, height + 1.7, -1.5]} castShadow><boxGeometry args={[0.6, 2.1, 0.8]} /><meshStandardMaterial color="#8e7666" roughness={1} /></mesh>
-        </group>;
-      })}
-    </group>)}
-    {/* Low white Stedelijk-inspired neighbour, away from the entrance axis. */}
-    <group position={[28, 0, -11]}>
-      <mesh position={[0, 3.1, 0]} castShadow><boxGeometry args={[21, 6.2, 14]} /><meshStandardMaterial color="#58615d" metalness={0.4} roughness={0.28} /></mesh>
-      <mesh position={[0, 7, 1]} castShadow><boxGeometry args={[25, 2.1, 17]} /><meshStandardMaterial color="#e0ded2" roughness={0.5} /></mesh>
     </group>
   </group>;
 }
@@ -446,7 +419,7 @@ export function MuseumExterior() {
       <MuseumVolumes reflection={reflection} />
       <GlassEntrance reflection={reflection} />
     </group>
-    <Neighbourhood reflection={null} />
+    <AmsterdamBuildings />
     <StreetFurniture />
   </group>;
 }
