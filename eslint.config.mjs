@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Cópias de trabalho do Agent Manager: não fazem parte do código do projeto
+    // e duplicavam todos os avisos e erros do lint.
+    ".kilo/**",
+    ".playwright-mcp/**",
   ]),
 ]);
 

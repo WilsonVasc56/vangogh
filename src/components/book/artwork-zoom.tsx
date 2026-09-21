@@ -29,20 +29,21 @@ export function ArtworkZoom({ obra, onClose }: Props) {
   const areaRef = useRef<HTMLDivElement>(null);
   const [escala, setEscala] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [obraAnterior, setObraAnterior] = useState(obra?.slug);
   const arrasto = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
 
-  // Toda obra nova reabre sem zoom.
-  useEffect(() => {
+  // Toda obra nova reabre sem zoom. Ajuste de estado durante o render (padrão
+  // documentado do React) em vez de useEffect, que causaria render em cascata.
+  if (obraAnterior !== obra?.slug) {
+    setObraAnterior(obra?.slug);
     setEscala(1);
     setPos({ x: 0, y: 0 });
-  }, [obra?.slug]);
+  }
 
   const aplicarEscala = useCallback((proxima: number) => {
-    setEscala((atual) => {
-      const alvo = Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, proxima));
-      if (alvo === ESCALA_MIN) setPos({ x: 0, y: 0 });
-      return alvo;
-    });
+    const alvo = Math.min(ESCALA_MAX, Math.max(ESCALA_MIN, proxima));
+    setEscala(alvo);
+    if (alvo === ESCALA_MIN) setPos({ x: 0, y: 0 });
   }, []);
 
   // Zoom com a roda do mouse (listener nativo para permitir preventDefault).

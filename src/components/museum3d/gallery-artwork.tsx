@@ -5,6 +5,17 @@ import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import type { Artwork } from "@/data/artworks";
 
+/**
+ * O TextureLoader padrão entrega a textura com colorSpace NoColorSpace, o que
+ * escurece as telas. A configuração acontece no carregamento (callback estável
+ * de módulo): mutar a textura devolvida por um hook dentro de um efeito viola
+ * as regras do React Compiler.
+ */
+function configureGalleryTexture(texture: THREE.Texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+}
+
 export interface ArtworkSlot {
   artwork: Artwork;
   position: [number, number, number];
@@ -94,9 +105,9 @@ export function GalleryArtwork({
   slot: ArtworkSlot;
   registry: MutableRefObject<Map<THREE.Object3D, Artwork>>;
 }) {
-  // TextureLoader usa o arquivo estático diretamente. Montar /_next/image
+  // O loader usa o arquivo estático diretamente. Montar /_next/image
   // manualmente funciona localmente, mas a Vercel rejeita a URL com 400.
-  const texture = useTexture(slot.artwork.imagem);
+  const texture = useTexture(slot.artwork.imagem, configureGalleryTexture);
   const image = useRef<THREE.Mesh>(null);
 
   const { width, height } = useMemo(
@@ -109,16 +120,14 @@ export function GalleryArtwork({
   );
 
   useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 8;
-    texture.needsUpdate = true;
     const mesh = image.current;
+    const registered = registry.current;
     if (!mesh) return;
-    registry.current.set(mesh, slot.artwork);
+    registered.set(mesh, slot.artwork);
     return () => {
-      registry.current.delete(mesh);
+      registered.delete(mesh);
     };
-  }, [registry, slot.artwork, texture]);
+  }, [registry, slot.artwork]);
 
   const matWidth = width + MAT_MARGIN * 2;
   const matHeight = height + MAT_MARGIN * 2;

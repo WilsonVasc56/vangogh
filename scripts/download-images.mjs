@@ -120,7 +120,8 @@ for (const { slug, wikiTitle } of entries) {
       writeFileSync(dest, Buffer.from(await img.arrayBuffer()));
       ok = true;
       break;
-    } catch (e) {
+    } catch {
+      // Falha de rede ou HTTP: espera progressiva antes da próxima tentativa.
       await sleep(attempt * 3000);
     }
   }

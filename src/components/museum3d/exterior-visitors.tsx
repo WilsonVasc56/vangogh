@@ -30,9 +30,9 @@ function memberPosition(motion: CrowdMotion, offset: number, target: THREE.Vecto
 }
 
 class VisitorAssetBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
+  override state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? null : this.props.children; }
+  override render() { return this.state.failed ? null : this.props.children; }
 }
 
 function ExteriorVisitor({ spec, motion, reducedMotion }: {

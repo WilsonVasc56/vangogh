@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 export type VaseVariant = 0 | 1 | 2 | 3;
@@ -419,7 +419,9 @@ export function MuseumArtPiece({
   rotationY?: number;
   variant?: VaseVariant;
 }) {
-  const targetRef = useRef<THREE.Object3D>(null);
+  // Alvo do spot criado como objeto do próprio three: mutar .current de um ref
+  // durante o render violaria as regras do React Compiler.
+  const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
   const piece = useMemo(() => {
     switch (variant) {
@@ -437,13 +439,13 @@ export function MuseumArtPiece({
 
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
-      {/* Alvo da iluminação pontual sobre o topo da peça */}
-      <object3D ref={targetRef} position={[0, 1.2, 0]} />
+      {/* Alvo da iluminação pontual no topo da peça; precisa estar na cena */}
+      <primitive object={lightTarget} position={[0, 1.2, 0]} />
 
-      {/* Spot de destaque suave de museu (como escolhido) */}
+      {/* Spot de destaque suave de museu */}
       <spotLight
         position={[0, 3.4, 0.3]}
-        target={targetRef.current ?? undefined}
+        target={lightTarget}
         intensity={22}
         distance={4.8}
         angle={0.42}
