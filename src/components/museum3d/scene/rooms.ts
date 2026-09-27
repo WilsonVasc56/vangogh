@@ -4,19 +4,25 @@ import { artworks, type Artwork } from "@/data/artworks";
 import { periods, type PeriodId } from "@/data/periods";
 import { MUSEUM_WALL_COLOR } from "../interior-materials";
 import type { ArtworkSlot } from "../gallery-artwork";
+import * as layoutConstants from "./constants";
 import {
+  backWallPositions,
+  distributeRoomArtworks,
+  sideArtworkCapacity,
+  sideArtworkZ,
+} from "./room-layout";
+
+const {
   BACK_WALL_ARTWORK_OFFSET,
-  BACK_WALL_ARTWORK_PITCH,
-  BACK_WALL_DOOR_MARGIN,
-  BACK_WALL_OUTER_MARGIN,
-  DOOR_HALF_WIDTH,
   FIRST_ROOM_Z,
   ROOM_HALF_WIDTH,
-} from "./constants";
+  ROOM_LENGTHS,
+} = layoutConstants;
 
 /**
  * Salas, estilos e distribuição das obras nas paredes. Extraído de
- * museum-scene.tsx para reduzir o tamanho daquele arquivo.
+ * museum-scene.tsx para reduzir o tamanho daquele arquivo. As regras puras de
+ * distribuição ficam em room-layout.ts.
  */
 
 export interface RoomConfig {
@@ -31,6 +37,10 @@ export interface RoomConfig {
   floorColor: string;
   accent: string;
   items: Artwork[];
+  /** Telas nas paredes laterais (pares à esquerda, ímpares à direita). */
+  sideItems: Artwork[];
+  /** Telas na parede de fundo, da esquerda para a direita. */
+  backItems: Artwork[];
 }
 
 const roomStyles = [
@@ -43,14 +53,6 @@ const roomStyles = [
 
 const roomOrder: PeriodId[] = ["nuenen", "paris", "arles", "saint-remy", "auvers"];
 
-const sideArtworkMinimums = {
-  nuenen: 6,
-  paris: 6,
-  arles: 14,
-  "saint-remy": 8,
-  auvers: 8,
-} satisfies Record<PeriodId, number>;
-
 function createRooms(): RoomConfig[] {
   let cursor = FIRST_ROOM_Z;
   return roomOrder.map((id, index) => {
@@ -58,8 +60,18 @@ function createRooms(): RoomConfig[] {
     const items = artworks
       .filter((artwork) => artwork.periodo === id)
       .sort((a, b) => a.ano - b.ano);
-    const rows = Math.ceil(items.length / 2);
-    const length = Math.max(12, rows * 2.25 + 4.5);
+    const length = ROOM_LENGTHS[id];
+    const last = index === roomOrder.length - 1;
+    const { side, back, omitted } = distributeRoomArtworks(
+      items,
+      backWallPositions(last, layoutConstants).length,
+      sideArtworkCapacity(length, layoutConstants),
+    );
+    if (omitted.length > 0 && process.env.NODE_ENV !== "production") {
+      console.warn(
+        `[museu] Sala ${id}: ${omitted.length} obra(s) sem parede: ${omitted.map((a) => a.slug).join(", ")}`,
+      );
+    }
     const startZ = cursor;
     const endZ = startZ - length;
     cursor = endZ;
@@ -72,6 +84,8 @@ function createRooms(): RoomConfig[] {
       centerZ: (startZ + endZ) / 2,
       length,
       items,
+      sideItems: side,
+      backItems: back,
       ...roomStyles[index],
     };
   });
@@ -80,75 +94,28 @@ function createRooms(): RoomConfig[] {
 export const rooms = createRooms();
 export const internalDoorBoundaries = rooms.slice(0, -1).map((room) => room.endZ);
 
-interface WallSegment {
-  startX: number;
-  endX: number;
-}
-
-function distributeArtworkPositions(segment: WallSegment) {
-  const width = segment.endX - segment.startX;
-  const count = Math.max(1, Math.floor(width / BACK_WALL_ARTWORK_PITCH));
-  const spacing = width / count;
-  return Array.from(
-    { length: count },
-    (_, index) => segment.startX + spacing * (index + 0.5),
-  );
-}
-
-function createBackWallPositions(last: boolean) {
-  const outerLeft = -ROOM_HALF_WIDTH + BACK_WALL_OUTER_MARGIN;
-  const outerRight = ROOM_HALF_WIDTH - BACK_WALL_OUTER_MARGIN;
-  const segments: WallSegment[] = last
-    ? [{ startX: outerLeft, endX: outerRight }]
-    : [
-        {
-          startX: outerLeft,
-          endX: -DOOR_HALF_WIDTH - BACK_WALL_DOOR_MARGIN,
-        },
-        {
-          startX: DOOR_HALF_WIDTH + BACK_WALL_DOOR_MARGIN,
-          endX: outerRight,
-        },
-      ];
-
-  return segments.flatMap(distributeArtworkPositions);
-}
-
-function getSideArtworks(room: RoomConfig, backArtworkCount: number) {
-  const uniqueSideCount = room.items.length - backArtworkCount;
-  const count = Math.max(uniqueSideCount, sideArtworkMinimums[room.id]);
-  return Array.from({ length: count }, (_, index) => room.items[index % room.items.length]);
-}
-
 function createArtworkSlots(): ArtworkSlot[] {
-  return rooms.flatMap((room) => {
-    const last = room.id === roomOrder.at(-1);
-    const backWallPositions = createBackWallPositions(last);
-    const backArtworkCount = Math.min(room.items.length, backWallPositions.length);
-    const sideArtworks = getSideArtworks(room, backArtworkCount);
-    const sideSlots = sideArtworks.map((artwork, index) => {
+  return rooms.flatMap((room, roomIndex) => {
+    const last = roomIndex === rooms.length - 1;
+    const backX = backWallPositions(last, layoutConstants);
+    const sideSlots = room.sideItems.map((artwork, index): ArtworkSlot => {
       const leftWall = index % 2 === 0;
-      const row = Math.floor(index / 2);
       return {
         artwork,
         // Origem no piso; o componente pendura a tela na linha de olhar (1,55 m).
         position: [
           leftWall ? -ROOM_HALF_WIDTH + 0.28 : ROOM_HALF_WIDTH - 0.28,
           0,
-          room.startZ - 2.7 - row * 2.25,
+          sideArtworkZ(room.startZ, index, layoutConstants),
         ],
         rotation: [0, leftWall ? Math.PI / 2 : -Math.PI / 2, 0],
-      } as ArtworkSlot;
+      };
     });
-    const backSlots = room.items.slice(-backArtworkCount).map((artwork, index) => ({
+    const backSlots = room.backItems.map((artwork, index): ArtworkSlot => ({
       artwork,
-      position: [
-        backWallPositions[index],
-        0,
-        room.endZ + BACK_WALL_ARTWORK_OFFSET,
-      ],
+      position: [backX[index], 0, room.endZ + BACK_WALL_ARTWORK_OFFSET],
       rotation: [0, 0, 0],
-    }) satisfies ArtworkSlot);
+    }));
 
     return [...sideSlots, ...backSlots];
   });

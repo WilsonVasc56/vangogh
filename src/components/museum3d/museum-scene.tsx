@@ -26,6 +26,8 @@ import {
 } from "./interior-materials";
 import { MuseumArtPiece, type VaseVariant } from "./museum-vases";
 import { CorridorMurals } from "./corridor-murals";
+import { GalleryIntroPanel } from "./gallery-intro-panel";
+import { InteriorGarden } from "./interior-garden";
 import { CAFE_PEOPLE, MuseumCafe } from "./museum-cafe";
 import {
   BUILDING_PORTAL_Z,
@@ -36,8 +38,13 @@ import {
   ROOM_HALF_WIDTH,
   ROOM_HEIGHT,
 } from "./scene/constants";
+import { roomBenchPlacements, roomGuardPlacement } from "./scene/room-furniture";
 import { artworkSlots, internalDoorBoundaries, rooms, type RoomConfig } from "./scene/rooms";
-import { resolveExteriorMovement, resolveRoomDecorMovement } from "./scene/collisions";
+import {
+  resolveBarrierZ,
+  resolveExteriorMovement,
+  resolveRoomDecorMovement,
+} from "./scene/collisions";
 
 interface MuseumSceneProps {
   active: boolean;
@@ -253,27 +260,19 @@ function GalleryControls({
 
     const entrancePassable = entranceOpen && Math.abs(nextX) < DOOR_HALF_WIDTH - 0.15;
     if (!entrancePassable) {
-      if (previousZ > ENTRANCE_DOOR_Z + 0.35 && nextZ <= ENTRANCE_DOOR_Z + 0.35) {
-        nextZ = ENTRANCE_DOOR_Z + 0.35;
-      } else if (
-        previousZ < ENTRANCE_DOOR_Z - 0.35 &&
-        nextZ >= ENTRANCE_DOOR_Z - 0.35
-      ) {
-        nextZ = ENTRANCE_DOOR_Z - 0.35;
-      }
+      nextZ = resolveBarrierZ(previousZ, nextZ, ENTRANCE_DOOR_Z, 0.35);
     }
 
     // Parede do prédio: passagem apenas pelo portal que leva ao corredor.
     const portalPassable = Math.abs(nextX) < 2.3 - PLAYER_RADIUS;
     if (!portalPassable) {
-      if (previousZ > BUILDING_PORTAL_Z + PLAYER_RADIUS && nextZ <= BUILDING_PORTAL_Z + PLAYER_RADIUS) {
-        nextZ = BUILDING_PORTAL_Z + PLAYER_RADIUS;
-      } else if (
-        previousZ < BUILDING_PORTAL_Z - PLAYER_RADIUS &&
-        nextZ >= BUILDING_PORTAL_Z - PLAYER_RADIUS
-      ) {
-        nextZ = BUILDING_PORTAL_Z - PLAYER_RADIUS;
-      }
+      nextZ = resolveBarrierZ(previousZ, nextZ, BUILDING_PORTAL_Z, PLAYER_RADIUS);
+    }
+
+    // Parede frontal de Nuenen: passagem apenas pelo vão do corredor de transição.
+    const corridorEntrancePassable = Math.abs(nextX) < 2.3 - PLAYER_RADIUS;
+    if (!corridorEntrancePassable) {
+      nextZ = resolveBarrierZ(previousZ, nextZ, FIRST_ROOM_Z, PLAYER_RADIUS);
     }
 
     // Dentro do corredor, as paredes laterais mantêm o visitante no eixo central.
@@ -283,11 +282,8 @@ function GalleryControls({
 
     internalDoorBoundaries.forEach((boundary, index) => {
       const passable = internalDoorsOpen[index] && Math.abs(nextX) < DOOR_HALF_WIDTH - 0.15;
-      if (passable) return;
-      if (previousZ > boundary + 0.28 && nextZ <= boundary + 0.28) {
-        nextZ = boundary + 0.28;
-      } else if (previousZ < boundary - 0.28 && nextZ >= boundary - 0.28) {
-        nextZ = boundary - 0.28;
+      if (!passable) {
+        nextZ = resolveBarrierZ(previousZ, nextZ, boundary, 0.28);
       }
     });
 
@@ -398,18 +394,49 @@ const VISITOR_MODEL = "/models/exterior-visitor.glb";
 const visitorTints = ["#4a6174", "#7b6858", "#3f5446", "#584d66", "#6f5b4a", "#8c877d"];
 const visitorHairColors = ["#30281e", "#715e4b", "#c4bfb6", "#3f3630", "#877254", "#d5d1c8"];
 
+function PoliceCap() {
+  return (
+    <group>
+      {/* Copa do quepe (ligeiramente alargada no topo, típica de segurança/polícia) */}
+      <mesh position={[0, 1.815, 0]} castShadow>
+        <cylinderGeometry args={[0.125, 0.114, 0.08, 20]} />
+        <meshStandardMaterial color="#163056" roughness={0.55} />
+      </mesh>
+      {/* Cinta escura */}
+      <mesh position={[0, 1.768, 0.005]} castShadow>
+        <cylinderGeometry args={[0.116, 0.116, 0.024, 20]} />
+        <meshStandardMaterial color="#0c1a2e" roughness={0.65} />
+      </mesh>
+      {/* Pala rígida sobre a testa, inclinada para frente */}
+      <mesh position={[0, 1.762, 0.15]} rotation={[0.35, 0, 0]} castShadow>
+        <boxGeometry args={[0.18, 0.008, 0.08]} />
+        <meshStandardMaterial color="#0b1420" roughness={0.4} metalness={0.2} />
+      </mesh>
+      {/* Distintivo metálico frontal */}
+      <mesh position={[0, 1.782, 0.118]} castShadow>
+        <boxGeometry args={[0.022, 0.025, 0.008]} />
+        <meshStandardMaterial color="#cca43b" metalness={0.85} roughness={0.28} />
+      </mesh>
+    </group>
+  );
+}
+
 function Visitor({
   position,
   rotationY = 0,
   tint = "#4a6174",
   hair = "#352b25",
+  pants = "#413d36",
   scale = 1,
+  cap = false,
 }: {
   position: [number, number, number];
   rotationY?: number;
   tint?: string;
   hair?: string;
+  pants?: string;
   scale?: number;
+  cap?: boolean;
 }) {
   const gltf = useGLTF(VISITOR_MODEL);
   const person = useRef<THREE.Group>(null);
@@ -430,29 +457,29 @@ function Visitor({
         const existing = clonedMaterials.get(material);
         if (existing) return existing;
         const clone = material.clone();
-        if (clone instanceof THREE.MeshStandardMaterial) {
-          if (material.name === "LightBrown") clone.color.set(tint);
-          if (material.name === "Hair" || material.name === "Eyebrows") clone.color.set(hair);
-          if (material.name === "Red_Dark") clone.color.set("#413d36");
-          clone.roughness = 0.9;
-        }
-        clonedMaterials.set(material, clone);
-        return clone;
-      });
-      object.material = Array.isArray(object.material) ? updatedMaterials : updatedMaterials[0];
+      if (clone instanceof THREE.MeshStandardMaterial) {
+        if (material.name === "LightBrown") clone.color.set(tint);
+        if (material.name === "Hair" || material.name === "Eyebrows") clone.color.set(hair);
+        if (material.name === "Red_Dark") clone.color.set(pants);
+        clone.roughness = 0.9;
+      }
+      clonedMaterials.set(material, clone);
+      return clone;
     });
+    object.material = Array.isArray(object.material) ? updatedMaterials : updatedMaterials[0];
+  });
 
-    return {
-      scene,
-      materials: [...clonedMaterials.values()],
-      skeletons: [...clonedSkeletons],
-    };
-  }, [gltf.scene, hair, tint]);
+  return {
+    scene,
+    materials: [...clonedMaterials.values()],
+    skeletons: [...clonedSkeletons],
+  };
+}, [gltf.scene, hair, pants, tint]);
 
-  const mixer = useMemo(() => new THREE.AnimationMixer(prepared.scene), [prepared.scene]);
+const mixer = useMemo(() => new THREE.AnimationMixer(prepared.scene), [prepared.scene]);
 
-  useEffect(() => {
-    const clip = gltf.animations.find((a) => a.name.endsWith("|Idle_Neutral"));
+useEffect(() => {
+  const clip = gltf.animations.find((a) => a.name.endsWith("|Idle_Neutral"));
     if (!clip) return;
     const action = mixer.clipAction(clip);
     action.reset().play();
@@ -478,6 +505,7 @@ function Visitor({
   return (
     <group ref={person} position={position} rotation={[0, rotationY, 0]} scale={scale}>
       <primitive object={prepared.scene} />
+      {cap ? <PoliceCap /> : null}
     </group>
   );
 }
@@ -509,12 +537,14 @@ interface Waypoint {
 
 function buildTour(room: RoomConfig, seed: number): Waypoint[] {
   const rand = mulberry32(seed);
-  const leftRows = Math.ceil(room.items.length / 2);
-  const rightRows = Math.floor(room.items.length / 2);
+  // Mesma contagem de rooms.ts: pares na parede esquerda, ímpares na direita.
+  const sideCount = room.sideItems.length;
+  const leftRows = Math.ceil(sideCount / 2);
+  const rightRows = Math.floor(sideCount / 2);
   const rowZ = (row: number) => room.startZ - 2.7 - row * 2.25;
   const crossFar = room.endZ + 2.2;
   const crossNear = room.startZ - 2.2;
-  const skipRightRow = room.items.length > 3 ? 1 : 0;
+  const skipRightRow = sideCount > 3 ? 1 : 0;
   const tour: Waypoint[] = [];
 
   for (let row = 0; row < leftRows; row++) {
@@ -704,7 +734,13 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
       rotationY={-Math.PI * 0.35}
       variant={((index * 2 + 1) % 4) as VaseVariant}
     />
-    <MuseumBench position={[0, 0, room.centerZ]} rotationY={Math.PI / 2} />
+    {roomBenchPlacements(room).map((bench) => (
+      <MuseumBench
+        key={`${bench.position[0]}-${bench.position[2]}`}
+        position={bench.position}
+        rotationY={bench.rotationY}
+      />
+    ))}
 
     {/* Visitantes humanos contemplando obras e circulando na sala */}
     <Suspense fallback={null}>
@@ -716,11 +752,20 @@ function RoomDecor({ room, index }: { room: RoomConfig; index: number }) {
         scale={0.98 + (index % 3) * 0.03}
       />
       <Visitor
-        position={[6.7, 0, room.items.length > 3 ? secondRowZ : firstPaintingZ]}
+        position={[6.7, 0, room.sideItems.length > 3 ? secondRowZ : firstPaintingZ]}
         rotationY={Math.PI / 2}
         tint={visitorTints[(index + 2) % visitorTints.length]}
         hair={visitorHairColors[(index + 2) % visitorHairColors.length]}
         scale={0.96 + ((index + 1) % 3) * 0.04}
+      />
+
+      <Visitor
+        position={roomGuardPlacement(room).position}
+        rotationY={roomGuardPlacement(room).rotationY}
+        tint="#1c3d66"
+        pants="#14161c"
+        hair="#1a120e"
+        cap
       />
 
       {/* Visitante percorrendo a sala como em um museu real */}
@@ -781,6 +826,33 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
       <planeGeometry args={[3.1, 0.38]} />
       <meshStandardMaterial color={room.accent} emissive={room.accent} emissiveIntensity={0.32} />
     </mesh>
+
+    {/* Parede frontal na primeira sala (Nuenen) com vão para o corredor de transição */}
+    {index === 0 && (
+      <>
+        <mesh position={[-(ROOM_HALF_WIDTH + 2.3) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, ROOM_HEIGHT, 0.28]} />
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+        </mesh>
+        <mesh position={[(ROOM_HALF_WIDTH + 2.3) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, ROOM_HEIGHT, 0.28]} />
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+        </mesh>
+        <mesh position={[0, (ROOM_HEIGHT + 4.6) / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[4.6, ROOM_HEIGHT - 4.6, 0.28]} />
+          <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
+        </mesh>
+        {/* Rodapés na face interna de Nuenen */}
+        <mesh position={[-(ROOM_HALF_WIDTH + 2.3) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, 0.16, 0.04]} />
+          <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+        </mesh>
+        <mesh position={[(ROOM_HALF_WIDTH + 2.3) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, 0.16, 0.04]} />
+          <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
+        </mesh>
+      </>
+    )}
 
     {/* Parede final com vão central, exceto na última sala */}
     {last ? (
@@ -874,6 +946,9 @@ function TransitionCorridor() {
 
     {/* Murais contemporâneos com fotos e frases de Van Gogh */}
     <CorridorMurals />
+
+    {/* Painel interpretativo que abre a galeria (parede oeste, junto ao portal) */}
+    <GalleryIntroPanel />
   </group>;
 }
 
@@ -905,6 +980,7 @@ function MuseumArchitecture({
     </Suspense>
     <SlidingDoors z={ENTRANCE_DOOR_Z} open={entranceOpen} register={doorRegistry} entrance />
     <TransitionCorridor />
+    <InteriorGarden />
 
     {/* Café do museu na ala leste do átrio, com barista e clientes */}
     <MuseumCafe />

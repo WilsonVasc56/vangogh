@@ -1,38 +1,46 @@
+// Confere se cada título da Wikipedia existe e tem imagem principal.
+// Uso: node scripts/check-titles.mjs
+// Artigos usados como `wikiTitle` pelas obras acrescentadas para completar as
+// salas. Obras sem artigo próprio usam `arquivoCommons` em artworks.ts.
 const titles = [
-  "Road with Cypress and Star",
-  "L'Arlésienne (painting)",
-  "The Zouave",
+  "Peasant Character Studies (Van Gogh series)",
+  "Water Mill at Kollen Near Nuenen",
+  "Still life paintings by Vincent van Gogh (Netherlands)",
+  "Congregation Leaving the Reformed Church in Nuenen",
+  "Cottages (Van Gogh series)",
+  "Old Church Tower at Nuenen",
+  "Peasant Woman Digging Up Potatoes",
+  "Asnières (Van Gogh series)",
+  "Wheat Fields",
+  "Agostina Segatori",
+  "Portraits of Vincent van Gogh",
   "Saintes-Maries (Van Gogh series)",
-  "Houses at Auvers",
-  "Thatched Cottages and Houses",
-  "Landscape with a Carriage and a Train",
-  "Portrait of Adeline Ravoux",
-  "Still Life: Vase with Pink Roses",
-  "Blossoming Chestnut Branches",
-  "Flowering Orchards",
-  "Still Life: Vase with Oleanders",
   "The Roulin Family",
-  "Cypresses (Van Gogh)",
-  "The Sower (Van Gogh)",
-  "Green Wheat Fields, Auvers",
-  "Poppy Field (Van Gogh)",
-  "Self-Portrait as a Painter",
-  "Avenue of Poplars in Autumn",
-  "The Pink Orchard",
-  "Oleanders",
-  "First Steps, after Millet",
+  "Eugène Boch",
+  "Van Gogh's Chair",
+  "Cypresses (Metropolitan Museum of Art)",
+  "Reaper (Van Gogh series)",
+  "Copies by Vincent van Gogh",
+  "Marguerite Gachet",
+  "List of works by Vincent van Gogh",
+  "Peasant Woman Against a Background of Wheat",
+  "Farms near Auvers",
 ];
 
 const r = await fetch(
-  "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=200&titles=" +
+  "https://en.wikipedia.org/w/api.php?action=query&format=json&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=200&titles=" +
     encodeURIComponent(titles.join("|")),
   { headers: { "User-Agent": "VanGoghMuseumApp/1.0" } }
 );
 const j = await r.json();
+for (const redirect of j.query.redirects ?? []) {
+  console.log("REDIR", redirect.from, "->", redirect.to);
+}
 for (const p of Object.values(j.query.pages)) {
   console.log(
     p.missing !== undefined ? "MISS" : "OK  ",
     p.thumbnail ? "img" : "---",
-    p.title
+    p.title,
+    p.thumbnail ? p.thumbnail.source.split("/").at(-1) : ""
   );
 }

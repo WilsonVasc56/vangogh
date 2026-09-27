@@ -28,6 +28,11 @@ interface ArtworkMeta {
   larguraCm?: number;
   alturaCm?: number;
   tecnica?: string;
+  /**
+   * Arquivo exato no Wikimedia Commons (domínio público), lido apenas por
+   * scripts/download-images.mjs quando a obra não tem artigo próprio na Wikipedia.
+   */
+  arquivoCommons?: string;
 }
 
 // Conteúdo curado e parafraseado a partir dos artigos da Wikipedia (CC BY-SA).
@@ -78,6 +83,96 @@ const meta: ArtworkMeta[] = [
     museu: "Van Gogh Museum, Amsterdã",
     descricao:
       "Uma avenida de choupos dourados sob o céu de outono, com uma figura solitária no caminho. A composição em perspectiva profunda e os amarelos terrosos mostram o Van Gogh holandês ainda sob influência de Millet e da Escola de Haia.",
+  },
+  {
+    slug: "tecelao",
+    titulo: "O Tecelão",
+    ano: 1884,
+    periodo: "nuenen",
+    wikiTitle: "Peasant Character Studies (Van Gogh series)",
+    museu: "Museum of Fine Arts, Boston",
+    descricao:
+      "Em Nuenen, Van Gogh pintou dezenas de tecelões presos a teares enormes na penumbra das casas. Via neles trabalhadores dignos e esquecidos, e o tear escuro domina a figura como uma máquina que engole o homem.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh - Weaver - Google Art Project.jpg",
+  },
+  {
+    slug: "moinho-de-agua-em-kollen",
+    titulo: "Moinho de Água em Kollen, perto de Nuenen",
+    ano: 1884,
+    periodo: "nuenen",
+    wikiTitle: "Water Mill at Kollen Near Nuenen",
+    museu: "Coleção particular",
+    descricao:
+      "Pintado em dois dias de maio de 1884, mostra o moinho de telhados vermelhos visto de frente, cercado de choupos. Van Gogh contou o trabalho em carta ao amigo pintor Anthon van Rappard.",
+    larguraCm: 80,
+    alturaCm: 60.5,
+    tecnica: "Óleo sobre tela",
+  },
+  {
+    slug: "vaso-com-lunarias",
+    titulo: "Vaso com Lunárias",
+    ano: 1884,
+    periodo: "nuenen",
+    wikiTitle: "Still life paintings by Vincent van Gogh (Netherlands)",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Uma natureza-morta de ramos secos de lunária num vaso de barro, sobre fundo escuro. Nos meses de inverno em Nuenen, Van Gogh treinava cor e textura com objetos simples da casa paroquial.",
+    arquivoCommons: "Vaas met judaspenningen - s0009V1962 - Van Gogh Museum.jpg",
+  },
+  {
+    slug: "saida-da-igreja-reformada",
+    titulo: "Congregação Saindo da Igreja Reformada em Nuenen",
+    ano: 1884,
+    periodo: "nuenen",
+    wikiTitle: "Congregation Leaving the Reformed Church in Nuenen",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "A pequena igreja onde o pai pregava, pintada no inverno de 1884 para a mãe acamada. Depois da morte do pai, Van Gogh acrescentou fiéis e folhas de outono — a tela foi roubada em 2002 e recuperada em 2016.",
+  },
+  {
+    slug: "a-choupana",
+    titulo: "A Choupana",
+    ano: 1885,
+    periodo: "nuenen",
+    wikiTitle: "Cottages (Van Gogh series)",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Uma casa de camponeses com telhado de colmo ao entardecer, com a luz amarela de uma janela no escuro. Van Gogh chamava essas moradias de 'ninhos humanos' e as pintou várias vezes em Nuenen.",
+    arquivoCommons: "Vincent van Gogh - The cottage - Google Art Project.jpg",
+  },
+  {
+    slug: "velha-torre-da-igreja-em-nuenen",
+    titulo: "A Velha Torre da Igreja em Nuenen",
+    ano: 1885,
+    periodo: "nuenen",
+    wikiTitle: "Old Church Tower at Nuenen",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "A torre medieval do cemitério camponês, em demolição enquanto ele a pintava. Para Van Gogh, a ruína entre as cruzes simbolizava como a fé e as instituições passam, mas a vida no campo continua.",
+  },
+  {
+    slug: "camponesa-colhendo-batatas",
+    titulo: "Camponesa Colhendo Batatas",
+    ano: 1885,
+    periodo: "nuenen",
+    wikiTitle: "Peasant Woman Digging Up Potatoes",
+    museu: "Museu Real de Belas Artes, Antuérpia",
+    descricao:
+      "Uma camponesa curvada sobre a terra, pintada no verão de Os Comedores de Batata. Seguindo Millet, Van Gogh queria mostrar o camponês enobrecido pelo trabalho duro, com cores de terra e pinceladas pesadas.",
+  },
+  {
+    slug: "cabeca-de-camponesa-com-touca-branca",
+    titulo: "Cabeça de Camponesa com Touca Branca",
+    ano: 1885,
+    periodo: "nuenen",
+    wikiTitle: "Peasant Character Studies (Van Gogh series)",
+    museu: "Coleção particular",
+    descricao:
+      "Um dos cerca de quarenta estudos de cabeças camponesas feitos no inverno de 1884–1885, em preparação para Os Comedores de Batata. A touca branca brilha contra o rosto curtido e o fundo escuro.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons:
+      "Kop van een vrouw met witte muts (Head of a Woman with White Cap) - Vincent van Gogh.jpg",
   },
   // ---------- PARIS (1886–1888) ----------
   {
@@ -161,6 +256,65 @@ const meta: ArtworkMeta[] = [
     larguraCm: 31.8,
     alturaCm: 40.6,
     tecnica: "Óleo sobre tela",
+  },
+  {
+    slug: "pesca-na-primavera-pont-de-clichy",
+    titulo: "Pesca na Primavera, a Pont de Clichy",
+    ano: 1887,
+    periodo: "paris",
+    wikiTitle: "Asnières (Van Gogh series)",
+    museu: "Art Institute of Chicago",
+    descricao:
+      "Um barco sob a ponte de Clichy, em Asnières, onde Van Gogh pintava ao ar livre com Émile Bernard e Signac. Os toques curtos de verde e azul mostram o impressionismo transformando sua paleta.",
+    arquivoCommons:
+      "Vincent van Gogh - Fishing in Spring, the Pont de Clichy (Asnières) - 1965.1169 - Art Institute of Chicago.jpg",
+  },
+  {
+    slug: "campo-de-trigo-com-perdiz",
+    titulo: "Campo de Trigo com Perdiz",
+    ano: 1887,
+    periodo: "paris",
+    wikiTitle: "Wheat Fields",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Espigas de trigo, papoulas e uma perdiz que levanta voo, na periferia de Paris. É um dos primeiros campos de trigo de Van Gogh, tema que o acompanharia até Auvers.",
+    arquivoCommons: "Korenveld met patrijs - s0197V1962 - Van Gogh Museum.jpg",
+  },
+  {
+    slug: "a-italiana",
+    titulo: "A Italiana",
+    ano: 1887,
+    periodo: "paris",
+    wikiTitle: "Agostina Segatori",
+    museu: "Musée d'Orsay, Paris",
+    descricao:
+      "Provável retrato de Agostina Segatori em traje típico italiano, com fundo amarelo chapado e moldura listrada pintada. As cores puras e a figura plana vêm das estampas japonesas que Van Gogh colecionava.",
+    arquivoCommons: "Vincent van Gogh - The Italian Woman - Google Art Project.jpg",
+  },
+  {
+    slug: "autorretrato-com-chapeu-de-feltro-cinza",
+    titulo: "Autorretrato com Chapéu de Feltro Cinza",
+    ano: 1887,
+    periodo: "paris",
+    wikiTitle: "Portraits of Vincent van Gogh",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "O autorretrato mais ousado dos anos parisienses: traços curtos de cores complementares irradiam em volta da cabeça como uma auréola. Mostra como Van Gogh adaptou o pontilhismo a um ritmo próprio.",
+    arquivoCommons: "Zelfportret met grijze vilthoed - s0016V1962 - Van Gogh Museum.jpg",
+  },
+  {
+    slug: "autorretrato-como-pintor",
+    titulo: "Autorretrato como Pintor",
+    ano: 1888,
+    periodo: "paris",
+    wikiTitle: "Portraits of Vincent van Gogh",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Pintado pouco antes de deixar Paris, mostra o artista diante do cavalete com a paleta de cores puras. Van Gogh descreveu a Theo um rosto 'cinza-rosado, olhos verdes' e marcado pelo cansaço da cidade.",
+    larguraCm: 50,
+    alturaCm: 65.1,
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Zelfportret als schilder - s0022V1962 - Van Gogh Museum.jpg",
   },
   // ---------- ARLES (1888–1889) ----------
   {
@@ -288,16 +442,6 @@ const meta: ArtworkMeta[] = [
       "Pintado de memória, sem modelo: o jardim da casa de infância na Holanda, com figuras que evocam a mãe e a irmã. As cores irreais e o traço decorativo mostram a influência de Gauguin.",
   },
   {
-    slug: "a-sesta",
-    titulo: "A Sesta",
-    ano: 1890,
-    periodo: "arles",
-    wikiTitle: "The Siesta (Van Gogh)",
-    museu: "Musée d'Orsay, Paris",
-    descricao:
-      "Homenagem a Millet, de quem Van Gogh copiou a composição de um casal descansando sobre o feno ao meio-dia. A luz dourada e violeta transforma o descanso camponês em idílio provençal.",
-  },
-  {
     slug: "la-berceuse",
     titulo: "La Berceuse (A Cantora de Cantigas de Ninar)",
     ano: 1889,
@@ -373,6 +517,68 @@ const meta: ArtworkMeta[] = [
     descricao:
       "Um vaso de oleandros rosa sobre uma mesa, ao lado de um exemplar de 'A Alegria de Viver' de Zola. As flores, tóxicas e exuberantes, contrastam com o livro — símbolo de vida e de literatura que Van Gogh amava.",
   },
+  {
+    slug: "barcos-de-pesca-em-saintes-maries",
+    titulo: "Barcos de Pesca na Praia de Saintes-Maries",
+    ano: 1888,
+    periodo: "arles",
+    wikiTitle: "Saintes-Maries (Van Gogh series)",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Numa viagem ao Mediterrâneo em junho de 1888, Van Gogh desenhou os barcos coloridos na areia antes que os pescadores partissem. A tela, feita depois em Arles, tem cores planas de estampa japonesa.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons:
+      "Vissersboten op het strand van Les Saintes-Maries-de-la-Mer - s0028V1962 - Van Gogh Museum.jpg",
+  },
+  {
+    slug: "o-semeador",
+    titulo: "O Semeador ao Pôr do Sol",
+    ano: 1888,
+    periodo: "arles",
+    wikiTitle: "Wheat Fields",
+    museu: "Kröller-Müller Museum, Otterlo",
+    descricao:
+      "Um camponês lança sementes sob um sol enorme, em homenagem ao Semeador de Millet. Van Gogh usou cores deliberadamente irreais — um campo violeta e um céu amarelo — para expressar o ciclo da vida.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "1888 van Gogh De zaaier anagoria.JPG",
+  },
+  {
+    slug: "carteiro-joseph-roulin",
+    titulo: "O Carteiro Joseph Roulin",
+    ano: 1888,
+    periodo: "arles",
+    wikiTitle: "The Roulin Family",
+    museu: "Museum of Fine Arts, Boston",
+    descricao:
+      "O carteiro de barba farta e uniforme azul, sentado de braços cruzados. Roulin foi o amigo mais fiel de Van Gogh em Arles; o pintor o comparava a Sócrates pela bondade e pelo jeito de filósofo.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh-facteur-Boston.jpeg",
+  },
+  {
+    slug: "eugene-boch",
+    titulo: "Eugène Boch (O Poeta)",
+    ano: 1888,
+    periodo: "arles",
+    wikiTitle: "Eugène Boch",
+    museu: "Musée d'Orsay, Paris",
+    descricao:
+      "O pintor belga Eugène Boch, retratado contra um céu azul profundo com estrelas. Van Gogh queria pintar 'o homem que sonha' e fez do amigo a figura do poeta, pendurando a tela no próprio quarto.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh - Eugène Boch - Google Art Project.jpg",
+  },
+  {
+    slug: "a-cadeira-de-van-gogh",
+    titulo: "A Cadeira de Van Gogh",
+    ano: 1888,
+    periodo: "arles",
+    wikiTitle: "Van Gogh's Chair",
+    museu: "National Gallery, Londres",
+    descricao:
+      "Uma cadeira rústica de palha com cachimbo e tabaco, sobre o piso de ladrilhos da Casa Amarela. Formava par com a Cadeira de Gauguin: um autorretrato sem rosto, feito de objetos simples.",
+    larguraCm: 73,
+    alturaCm: 91.8,
+    tecnica: "Óleo sobre tela",
+  },
   // ---------- SAINT-RÉMY (1889–1890) ----------
   {
     slug: "a-noite-estrelada",
@@ -412,6 +618,29 @@ const meta: ArtworkMeta[] = [
     larguraCm: 90.9,
     alturaCm: 72.1,
     tecnica: "Óleo sobre tela",
+  },
+  {
+    slug: "ciprestes",
+    titulo: "Ciprestes",
+    ano: 1889,
+    periodo: "saint-remy",
+    wikiTitle: "Cypresses (Metropolitan Museum of Art)",
+    museu: "Metropolitan Museum of Art, Nova York",
+    descricao:
+      "Dois ciprestes torcidos como chamas sobem até a borda da tela, sob um céu de nuvens espirais. Pintado em junho de 1889, pouco depois da internação, com a tinta aplicada em relevo espesso.",
+    larguraCm: 74,
+    alturaCm: 93.4,
+    tecnica: "Óleo sobre tela",
+  },
+  {
+    slug: "campo-de-trigo-com-ceifeiro",
+    titulo: "Campo de Trigo com Ceifeiro",
+    ano: 1889,
+    periodo: "saint-remy",
+    wikiTitle: "Reaper (Van Gogh series)",
+    museu: "Kröller-Müller Museum, Otterlo (entre outras versões)",
+    descricao:
+      "Um ceifeiro no campo atrás do asilo, sob um sol matinal que inunda tudo de ouro. Van Gogh via nele a imagem da morte ceifando a humanidade, mas descreveu a cena como 'quase sorridente'.",
   },
   {
     slug: "amendoeira-em-flor",
@@ -491,6 +720,30 @@ const meta: ArtworkMeta[] = [
     museu: "National Gallery of Art, Washington",
     descricao:
       "Pintada nos últimos dias em Saint-Rémy, como um presente de despedida. As rosas quase brancas sobre fundo verde-claro transmitem calma e esperança — contraste deliberado com as tempestades dos ciprestes.",
+  },
+  {
+    slug: "a-sesta",
+    titulo: "A Sesta",
+    ano: 1890,
+    periodo: "saint-remy",
+    wikiTitle: "The Siesta (Van Gogh)",
+    museu: "Musée d'Orsay, Paris",
+    descricao:
+      "Homenagem a Millet, de quem Van Gogh copiou a composição de um casal descansando sobre o feno ao meio-dia. A luz dourada e violeta transforma o descanso camponês em idílio provençal.",
+  },
+  {
+    slug: "primeiros-passos",
+    titulo: "Primeiros Passos (segundo Millet)",
+    ano: 1890,
+    periodo: "saint-remy",
+    wikiTitle: "Copies by Vincent van Gogh",
+    museu: "Metropolitan Museum of Art, Nova York",
+    descricao:
+      "Um pai larga a pá e abre os braços para a filha que dá os primeiros passos. No asilo, sem modelos, Van Gogh 'traduzia' gravuras de Millet em cor, como um músico interpreta uma partitura.",
+    larguraCm: 91.1,
+    alturaCm: 72.4,
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "First Steps, after Millet MET DP124808.jpg",
   },
   // ---------- AUVERS-SUR-OISE (1890) ----------
   {
@@ -617,6 +870,91 @@ const meta: ArtworkMeta[] = [
     museu: "Fundação E.G. Bührle, Zurique",
     descricao:
       "Galhos de castanheiro em flor sobre fundo azul-violeta, pintados em Auvers na primavera. As flores brancas e os contornos sinuosos lembram as amendoeiras de Saint-Rémy, agora com a luz do norte.",
+  },
+  {
+    slug: "campos-de-trigo-verde-auvers",
+    titulo: "Campos de Trigo Verde, Auvers",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Wheat Fields",
+    museu: "National Gallery of Art, Washington",
+    descricao:
+      "Um campo de trigo ainda verde ondulando ao vento, sem horizonte nem figuras. As pinceladas longas e rítmicas quase tornam a paisagem abstrata — puro movimento de cor.",
+    larguraCm: 91.44,
+    alturaCm: 72.39,
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh, Green Wheat Fields, Auvers, 1890, NGA 163323.jpg",
+  },
+  {
+    slug: "marguerite-gachet-ao-piano",
+    titulo: "Marguerite Gachet ao Piano",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Marguerite Gachet",
+    museu: "Kunstmuseum Basel",
+    descricao:
+      "A filha do Dr. Gachet ao piano, num formato vertical e estreito incomum. O vestido branco e o fundo verde pontilhado de laranja fazem do retrato uma composição quase musical.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh - Mademoiselle Gachet au piano.jpg",
+  },
+  {
+    slug: "rua-e-escadaria-em-auvers",
+    titulo: "Rua e Escadaria em Auvers",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "List of works by Vincent van Gogh",
+    museu: "Saint Louis Art Museum",
+    descricao:
+      "Moradores sobem e descem os degraus de uma rua da vila, entre casas e árvores ondulantes. As figuras pequenas e os caminhos sinuosos mostram a vida cotidiana de Auvers nos últimos meses do pintor.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Vincent van Gogh - Stairway at Auvers - 1-1935 - Saint Louis Art Museum.jpg",
+  },
+  {
+    slug: "camponesa-diante-do-trigo",
+    titulo: "Camponesa Diante do Trigo",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Peasant Woman Against a Background of Wheat",
+    museu: "Coleção particular",
+    descricao:
+      "Uma camponesa de chapéu de palha amarelo e blusa azul pontilhada, diante de uma parede de espigas e papoulas. Van Gogh pintou várias versões do tema, unindo retrato e trigo, os dois grandes assuntos de Auvers.",
+  },
+  {
+    slug: "fazendas-perto-de-auvers",
+    titulo: "Fazendas perto de Auvers",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Farms near Auvers",
+    museu: "Tate, Londres",
+    descricao:
+      "Telhados de colmo cobertos de musgo, cujas curvas se repetem nos campos e colinas. Van Gogh escreveu à irmã que os telhados eram 'soberbos'; o céu em branco sugere uma tela inacabada.",
+  },
+  {
+    slug: "campo-de-trigo-sob-nuvens-de-tempestade",
+    titulo: "Campo de Trigo sob Nuvens de Tempestade",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Wheat Fields",
+    museu: "Van Gogh Museum, Amsterdã",
+    descricao:
+      "Uma faixa verde de trigo sob um céu azul pesado, num formato largo de 'quadrado duplo'. Van Gogh falou a Theo da 'tristeza e solidão extrema' desses campos, mas também do que via de saudável neles.",
+    larguraCm: 101.3,
+    alturaCm: 50.4,
+    tecnica: "Óleo sobre tela",
+    arquivoCommons: "Korenveld onder onweerslucht - s0106V1962 - Van Gogh Museum.jpg",
+  },
+  {
+    slug: "campos-de-trigo-apos-a-chuva",
+    titulo: "Campos de Trigo após a Chuva (A Planície de Auvers)",
+    ano: 1890,
+    periodo: "auvers",
+    wikiTitle: "Wheat Fields",
+    museu: "Carnegie Museum of Art, Pittsburgh",
+    descricao:
+      "A planície de Auvers vista do alto, em faixas de verde e amarelo sob nuvens baixas. Pintada em julho de 1890, poucas semanas antes da morte, é uma das últimas grandes paisagens do artista.",
+    tecnica: "Óleo sobre tela",
+    arquivoCommons:
+      "Vincent van Gogh - Wheat Fields after the Rain (The Plain of Auvers) - 1890.jpg",
   },
 ];
 

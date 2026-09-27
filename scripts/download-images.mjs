@@ -9,10 +9,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const root = process.cwd();
 const src = readFileSync(path.join(root, "src/data/artworks.ts"), "utf8");
 
-const entries = [];
-const re = /slug:\s*"([^"]+)"[\s\S]*?wikiTitle:\s*"([^"]+)"/g;
-let m;
-while ((m = re.exec(src))) entries.push({ slug: m[1], wikiTitle: m[2] });
+// Cada bloco começa em `slug:`; `arquivoCommons` (opcional) fixa o arquivo exato
+// no Wikimedia Commons quando a obra não tem artigo próprio na Wikipedia.
+const entries = src
+  .split(/(?=\bslug:\s*")/)
+  .slice(1)
+  .map((block) => ({
+    slug: block.match(/slug:\s*"([^"]+)"/)?.[1],
+    wikiTitle: block.match(/wikiTitle:\s*"([^"]+)"/)?.[1],
+    arquivoCommons: block.match(/arquivoCommons:\s*"([^"]+)"/)?.[1],
+  }))
+  .filter((entry) => entry.slug && entry.wikiTitle);
 console.log(`${entries.length} obras encontradas`);
 
 const outDir = path.join(root, "public/artworks");
@@ -31,16 +38,38 @@ async function apiGet(params) {
   throw new Error("API indisponível: " + params.slice(0, 60));
 }
 
-// 1) Uma chamada batch para resolver todas as imagens
-const titles = entries.map((e) => e.wikiTitle).join("|");
-const json = await apiGet(
-  "prop=pageimages&piprop=thumbnail%7Coriginal&pithumbsize=1400&titles=" +
-    encodeURIComponent(titles)
-);
+async function commonsFileUrl(fileName) {
+  const url =
+    "https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&iiprop=url&iiurlwidth=1400&titles=" +
+    encodeURIComponent("File:" + fileName);
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const res = await fetch(url, { headers: UA });
+    if (res.status === 429 || !res.headers.get("content-type")?.includes("json")) {
+      await sleep(attempt * 4000);
+      continue;
+    }
+    const page = Object.values((await res.json()).query.pages)[0];
+    return page?.imageinfo?.[0]?.thumburl ?? page?.imageinfo?.[0]?.url ?? null;
+  }
+  throw new Error("Commons indisponível: " + fileName);
+}
 
+// 1) Chamadas batch (a API aceita até 50 títulos por vez) para resolver as imagens
 const byTitle = {};
-for (const page of Object.values(json.query.pages)) {
-  if (!page.missing) byTitle[page.title] = page.thumbnail?.source ?? page.original?.source ?? null;
+const uniqueTitles = [...new Set(entries.filter((e) => !e.arquivoCommons).map((e) => e.wikiTitle))];
+for (let start = 0; start < uniqueTitles.length; start += 50) {
+  const json = await apiGet(
+    "redirects=1&prop=pageimages&piprop=thumbnail%7Coriginal&pithumbsize=1400&titles=" +
+      encodeURIComponent(uniqueTitles.slice(start, start + 50).join("|"))
+  );
+  const redirects = Object.fromEntries((json.query.redirects ?? []).map((r) => [r.to, r.from]));
+  for (const page of Object.values(json.query.pages)) {
+    if (page.missing !== undefined) continue;
+    const url = page.thumbnail?.source ?? page.original?.source ?? null;
+    byTitle[page.title] = url;
+    if (redirects[page.title]) byTitle[redirects[page.title]] = url;
+  }
+  await sleep(1200);
 }
 
 // Fallback 1: título ausente/sem imagem -> busca full-text e tenta o 1º resultado
@@ -90,8 +119,16 @@ async function resolveImage(wikiTitle, slug) {
 // 2) Download sequencial com pausa e retry
 const map = {};
 const failures = [];
-for (const { slug, wikiTitle } of entries) {
-  const url = await resolveImage(wikiTitle, slug);
+for (const { slug, wikiTitle, arquivoCommons } of entries) {
+  const cached = ["jpg", "png", "webp"].find((ext) => existsSync(path.join(outDir, `${slug}.${ext}`)));
+  if (cached) {
+    map[slug] = `/artworks/${slug}.${cached}`;
+    console.log(`cache ${slug}`);
+    continue;
+  }
+  const url = arquivoCommons
+    ? await commonsFileUrl(arquivoCommons)
+    : await resolveImage(wikiTitle, slug);
   if (!url) {
     failures.push(slug);
     console.log(`FALHA ${slug} (sem imagem para '${wikiTitle}')`);

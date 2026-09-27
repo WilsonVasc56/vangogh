@@ -13,8 +13,12 @@ Mapa rápido para reduzir o tempo de alteração. Combine com
 | Árvores, gramados, canteiros | `exterior-landscape.tsx` |
 | Multidão da praça (crianças, idosos, trajetos) | `exterior-visitors.tsx` + `exterior-crowd.ts` |
 | Visitantes dentro das salas | `museum-scene.tsx` (`Visitor`, `RoamingVisitor`) |
+| Bancos e policial de cada sala | `scene/room-furniture.ts` |
 | Vasos e esculturas sobre plintos | `museum-vases.tsx` |
 | Murais com retratos e citações no corredor | `corridor-murals.tsx` |
+| Painel interpretativo de abertura da galeria (corredor, parede oeste) | `gallery-intro-panel.tsx` |
+| Jardim interno no recuo ao lado da primeira sala | `interior-garden.tsx` + `src/data/interior-garden.ts` |
+| Quebra de texto em texturas de canvas | `scene/canvas-text.ts` |
 | Café do átrio (balcão, mesas, pessoas) | `museum-cafe.tsx` |
 | Casario tradicional de Amsterdã | `amsterdam-buildings.tsx` |
 | Enquadramento inicial da câmera / DPR | `museum-experience.tsx` |

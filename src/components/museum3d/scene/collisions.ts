@@ -4,7 +4,9 @@ import * as THREE from "three";
 import { EXTERIOR_GARDEN_BOUNDS, EXTERIOR_TREE_TRUNKS } from "../exterior-landscape";
 import { EXTERIOR_GLASS_SEGMENTS } from "../museum-exterior";
 import { CAFE_COLLISION_BOXES } from "../museum-cafe";
+import { INTERIOR_GARDEN_COLLISION_BOXES } from "../interior-garden";
 import { FIRST_ROOM_Z, PLAYER_RADIUS } from "./constants";
+import { roomFurnitureCollisionBoxes } from "./room-furniture";
 import { rooms } from "./rooms";
 
 /**
@@ -70,8 +72,8 @@ const roomDecorBoxes: CollisionBox[] = rooms.flatMap((room) => [
   // Vasos sobre pedestais
   { minX: -7.2, maxX: -6.1, minZ: room.startZ - 1.7, maxZ: room.startZ - 0.6 },
   { minX: 6.1, maxX: 7.2, minZ: room.endZ + 0.7, maxZ: room.endZ + 1.8 },
-  // Banco central rotacionado em 90 graus
-  { minX: -0.52, maxX: 0.52, minZ: room.centerZ - 1.85, maxZ: room.centerZ + 1.85 },
+  // Dois bancos laterais e o policial da entrada
+  ...roomFurnitureCollisionBoxes(room),
 ]);
 
 function circleHitsBox(x: number, z: number, box: CollisionBox) {
@@ -105,6 +107,9 @@ function circleHitsSegment(x: number, z: number, segment: CollisionSegment) {
 }
 
 function collidesWithExterior(x: number, z: number) {
+  // O raio do visitante alcança a borda do jardim ainda dentro da primeira sala.
+  // Testar antes do corte do exterior evita atravessar a borda ou saltar ao corredor.
+  if (INTERIOR_GARDEN_COLLISION_BOXES.some((box) => circleHitsBox(x, z, box))) return true;
   // O exterior só interfere antes da primeira sala; dentro dela vale a planta interna.
   if (z < FIRST_ROOM_Z - 0.25) return false;
   return (
@@ -145,3 +150,6 @@ export function resolveRoomDecorMovement(
   if (collidesWithRoomDecor(x, z)) z = previousZ;
   return { x, z };
 }
+
+export { resolveBarrierZ } from "./room-layout";
+

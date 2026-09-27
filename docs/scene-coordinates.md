@@ -24,6 +24,25 @@ abaixo foram conferidos no código em `src/components/museum3d/`.
 | `ROOM_HEIGHT` | `6.5` | Pé-direito das galerias |
 | `DOOR_HALF_WIDTH` | `1.65` | Meio-vão das portas internas entre salas |
 | `PLAYER_RADIUS` | `0.42` | Raio de colisão do visitante |
+| `ROOM_LENGTHS` | Nuenen `12`, Paris `13.5`, Arles `24.75`, Saint-Rémy `15.75`, Auvers `18` | Comprimento fixo de cada sala ao longo de −Z |
+| `SIDE_ARTWORK_FIRST_OFFSET` | `2.7` | Distância do início da sala até a primeira tela lateral |
+| `SIDE_ARTWORK_PITCH` | `2.25` | Espaçamento entre telas numa parede lateral |
+| `SIDE_ARTWORK_END_CLEARANCE` | `2.0` | Folga mínima entre a última tela lateral e a parede de fundo |
+
+## Distribuição das obras nas salas (`scene/room-layout.ts`)
+
+- O comprimento da sala **não depende** do número de obras (`ROOM_LENGTHS`).
+  Acrescentar telas não desloca portas, bancos, policiais nem colisões.
+- **Parede de fundo:** recebe as últimas obras (cronologicamente) da época —
+  4 posições nas salas com porta, 6 na última sala (Auvers).
+- **Paredes laterais:** recebem as obras restantes, em ordem cronológica,
+  alternando esquerda/direita, até `floor((comprimento − 2.7 − 2.0) / 2.25) + 1`
+  telas por parede: Nuenen 4, Paris 4, Arles 9, Saint-Rémy 5, Auvers 6.
+- **Nenhuma obra se repete.** Se uma época tiver mais obras do que paredes, o
+  excedente fica fora da cena (aviso no console em desenvolvimento). Para as
+  paredes ficarem cheias, cada época precisa de capacidade lateral + fundo:
+  Nuenen 12, Paris 12, Arles 22, Saint-Rémy 14, Auvers 18 — conferido por
+  `scene/rooms.test.mjs`.
 
 ## Faixas proibidas (invariantes)
 
@@ -35,6 +54,10 @@ abaixo foram conferidos no código em `src/components/museum3d/`.
 3. **Limites de caminhada do visitante:** `x ∈ [-18, 18]` e `z ≤ 42` na praça.
 4. **Eixo da entrada livre:** nada pode bloquear `|x| < 1.85` na faixa da porta
    (`z` entre 12.3 e 14.8), senão o visitante não consegue entrar.
+5. **Mobília das salas:** dois bancos em `x = ±4.15`, `z = centerZ`, comprimento ao
+   longo de Z. O policial fica em `x = -2.5`, `z = startZ − 1.4`, na entrada de cada
+   porta do lado esquerdo, fora do vão da porta (`|x| < 1.65`), olhando para o fundo da sala.
+   Posição e colisão saem de `scene/room-furniture.ts`.
 
 ## Átrio de vidro
 
@@ -46,6 +69,19 @@ cai de `x = -4.35` para `x = +8.1` (mais alta à esquerda, mais baixa à direita
 `z = 7.4 + 7.4·√(1 − (x/8.1)²)` para a borda do vidro.
 
 ## Café (ala leste do átrio)
+
+### Jardim interno do recuo leste
+
+- À esquerda de quem olha de dentro da primeira sala para a entrada (+Z).
+- Canteiro em `x ∈ [2.64, 8.16]`, `z ∈ [-1.44, 7.32]`, entre a face externa
+  do corredor (`x = 2.6`), a alvenaria (`x = 8.2`) e o fundo do café (`z = 7.4`).
+- Base própria cobre o terreno aparente; borda a 0.34 m, folhagens volumosas
+  abaixo de 4.6 m e integralmente contidas no recuo. Não avança sobre o parquet.
+- `InteriorGarden` exporta `INTERIOR_GARDEN_COLLISION_BOXES`, derivadas dos
+  mesmos limites da base. Testadas antes do corte de colisão do exterior, pois o
+  raio do visitante alcança a borda enquanto ele ainda está na primeira sala.
+
+### Mobiliário do café
 
 - Balcão: `x ∈ [3.2, 7.6]`, recuo em `z = 8.75`, profundidade `0.6`.
 - Mesas: `(4.2, 10.4)`, `(6.55, 9.6)`, `(4.0, 12.5)`, `(5.9, 11.3)`.

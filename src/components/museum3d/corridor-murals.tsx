@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { wrapText } from "./scene/canvas-text";
 
 interface MuralSpec {
   imageSrc: string;
@@ -62,30 +63,6 @@ const MURAL_SPECS: readonly MuralSpec[] = [
     rotationY: -Math.PI / 2,
   },
 ];
-
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let currentLine = words[0];
-
-  for (let i = 1; i < words.length; i++) {
-    const word = words[i];
-    const testLine = `${currentLine} ${word}`;
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  }
-  lines.push(currentLine);
-  return lines;
-}
 
 function createMuralTexture(spec: MuralSpec): THREE.CanvasTexture | null {
   if (typeof document === "undefined") return null;
@@ -171,7 +148,7 @@ function createMuralTexture(spec: MuralSpec): THREE.CanvasTexture | null {
     // Texto da citação em tom marfim claro
     ctx.fillStyle = "#f3ede3";
     ctx.font = "italic 33px Georgia, serif";
-    const lines = wrapText(ctx, spec.quote, maxTextWidth);
+    const lines = wrapText((value) => ctx.measureText(value).width, spec.quote, maxTextWidth);
     const lineHeight = 46;
     const startY = 160;
 
