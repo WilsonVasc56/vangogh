@@ -5,6 +5,7 @@ import { EXTERIOR_GARDEN_BOUNDS, EXTERIOR_TREE_TRUNKS } from "../exterior-landsc
 import { EXTERIOR_GLASS_SEGMENTS } from "../museum-exterior";
 import { CAFE_COLLISION_BOXES } from "../museum-cafe";
 import { INTERIOR_GARDEN_COLLISION_BOXES } from "../interior-garden";
+import type { CameraObstacles } from "./camera-rig";
 import { FIRST_ROOM_Z, PLAYER_RADIUS } from "./constants";
 import { roomFurnitureCollisionBoxes } from "./room-furniture";
 import { rooms } from "./rooms";
@@ -35,11 +36,25 @@ interface CollisionSegment {
   bz: number;
 }
 
-const exteriorBoxes: CollisionBox[] = [
-  { minX: 8.2, maxX: 20, minZ: -0.9, maxZ: 8.9 },
-  { minX: 7.5, maxX: 10.7, minZ: 7.55, maxZ: 7.8 },
+/** Volumes altos do prédio: bloqueiam o visitante e também a câmera em 3ª pessoa. */
+const EAST_WING_BOX: CollisionBox = { minX: 8.2, maxX: 20, minZ: -0.9, maxZ: 8.9 };
+/** Face oeste da ala leste de alvenaria. */
+export const EAST_WING_MIN_X = EAST_WING_BOX.minX;
+
+const MUSEUM_WING_BOXES: CollisionBox[] = [
+  // Ala leste de alvenaria
+  EAST_WING_BOX,
+  // Painéis de vidro laterais do vestíbulo
   { minX: -2.4, maxX: -2.24, minZ: 12.32, maxZ: 14.12 },
   { minX: 2.24, maxX: 2.4, minZ: 12.32, maxZ: 14.12 },
+];
+
+/** Ala oeste curva de pedra. */
+const MUSEUM_WING_ELLIPSE: CollisionEllipse = { x: -8.8, z: 5.5, radiusX: 6.5, radiusZ: 5.8 };
+
+const exteriorBoxes: CollisionBox[] = [
+  ...MUSEUM_WING_BOXES,
+  { minX: 7.5, maxX: 10.7, minZ: 7.55, maxZ: 7.8 },
   ...EXTERIOR_GARDEN_BOUNDS,
   { minX: -12.9, maxX: -10.1, minZ: 18.5, maxZ: 19.3 },
   { minX: 12.4, maxX: 15.2, minZ: 18.5, maxZ: 19.3 },
@@ -51,7 +66,7 @@ const exteriorBoxes: CollisionBox[] = [
 ];
 
 const exteriorEllipses: CollisionEllipse[] = [
-  { x: -8.8, z: 5.5, radiusX: 6.5, radiusZ: 5.8 },
+  MUSEUM_WING_ELLIPSE,
   ...EXTERIOR_TREE_TRUNKS.map(({ x, z, radius }) => ({
     x,
     z,
@@ -150,6 +165,30 @@ export function resolveRoomDecorMovement(
   if (collidesWithRoomDecor(x, z)) z = previousZ;
   return { x, z };
 }
+
+const WING_HEIGHT = 13;
+const GLASS_HEIGHT = 11;
+const TRUNK_HEIGHT = 3;
+
+/**
+ * Obstáculos externos da câmera em 3ª pessoa, derivados dos mesmos volumes do
+ * visitante. Mobiliário baixo (mesas, canteiros, fitas) fica de fora: a câmera
+ * passa por cima dele.
+ */
+export const EXTERIOR_CAMERA_OBSTACLES: CameraObstacles = {
+  boxes: MUSEUM_WING_BOXES.map((box) => ({ ...box, minY: 0, maxY: WING_HEIGHT })),
+  ellipses: [
+    { ...MUSEUM_WING_ELLIPSE, maxY: WING_HEIGHT },
+    ...EXTERIOR_TREE_TRUNKS.map(({ x, z, radius }) => ({
+      x,
+      z,
+      radiusX: radius,
+      radiusZ: radius,
+      maxY: TRUNK_HEIGHT,
+    })),
+  ],
+  segments: EXTERIOR_GLASS_SEGMENTS.map((segment) => ({ ...segment, maxY: GLASS_HEIGHT })),
+};
 
 export { resolveBarrierZ } from "./room-layout";
 

@@ -7,7 +7,12 @@ Mapa rápido para reduzir o tempo de alteração. Combine com
 |---|---|
 | Contéudo das obras, períodos, biografia, livro | `src/data/` |
 | Rotas e páginas (`/`, `/biografia`, `/livro`, `/museu`) | `src/app/` |
-| Colisor do visitante, sequência de salas, portas internas | `src/components/museum3d/museum-scene.tsx` |
+| Sequência de salas, portas internas | `src/components/museum3d/museum-scene.tsx` |
+| Controles (teclado, mouse, toque), mira, detecção de sala | `gallery-controls.tsx` |
+| Colisor do visitante (passo contra paredes, portas, mobília) | `scene/player-movement.ts` + `scene/collisions.ts` |
+| Câmera 1ª/3ª pessoa, recuo contra paredes | `scene/camera-rig.ts` (puro, testado) |
+| Personagem do visitante na 3ª pessoa | `player-avatar.tsx` |
+| Botão e atalho V de alternância de visão | `museum-experience.tsx` |
 | Piso, paredes, teto e rodapés das galerias | `museum-scene.tsx` (`Room`) + `interior-materials.ts` (textura) |
 | Fachada, átrio de vidro, praça, sinalização | `museum-exterior.tsx` |
 | Árvores, gramados, canteiros | `exterior-landscape.tsx` |

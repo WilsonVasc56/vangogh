@@ -2,7 +2,7 @@
 
 import { Environment, Lightformer, Sky, useGLTF } from "@react-three/drei";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useFrame } from "@react-three/fiber";
 import {
   Suspense,
   useEffect,
@@ -29,276 +29,40 @@ import { CorridorMurals } from "./corridor-murals";
 import { GalleryIntroPanel } from "./gallery-intro-panel";
 import { InteriorGarden } from "./interior-garden";
 import { CAFE_PEOPLE, MuseumCafe } from "./museum-cafe";
+import { GalleryControls, type MobileInput } from "./gallery-controls";
+import type { ViewMode } from "./scene/camera-rig";
 import {
   BUILDING_PORTAL_Z,
+  CORRIDOR_HALF_WIDTH,
+  CORRIDOR_HEIGHT,
+  CORRIDOR_WALL_THICKNESS,
   DOOR_HALF_WIDTH,
+  DOOR_PANEL_DEPTH,
+  DOOR_PANEL_HEIGHT,
+  DOOR_PANEL_WIDTH,
   ENTRANCE_DOOR_Z,
   FIRST_ROOM_Z,
-  PLAYER_RADIUS,
+  INTERNAL_DOORWAY_HEIGHT,
+  PARTITION_THICKNESS,
   ROOM_HALF_WIDTH,
   ROOM_HEIGHT,
+  SIDE_WALL_THICKNESS,
 } from "./scene/constants";
 import { roomBenchPlacements, roomGuardPlacement } from "./scene/room-furniture";
 import { artworkSlots, internalDoorBoundaries, rooms, type RoomConfig } from "./scene/rooms";
-import {
-  resolveBarrierZ,
-  resolveExteriorMovement,
-  resolveRoomDecorMovement,
-} from "./scene/collisions";
+
+export type { MobileInput } from "./gallery-controls";
+export type { ViewMode } from "./scene/camera-rig";
 
 interface MuseumSceneProps {
   active: boolean;
   isMobile: boolean;
   mobileInput: MutableRefObject<MobileInput>;
   interactionToken: number;
+  viewMode: ViewMode;
   onArtworkSelect: (artwork: Artwork) => void;
   onPointerLockChange: (locked: boolean) => void;
   onRoomChange: (period: PeriodId | null) => void;
-}
-
-export interface MobileInput {
-  forward: number;
-  strafe: number;
-  lookX: number;
-  lookY: number;
-}
-
-// Ferramenta de QA: abrir /museu#debug-walk permite caminhar sem pointer lock
-// (útil em ambientes headless/automação, onde o navegador bloqueia o lock).
-const debugFreeRoam =
-  typeof window !== "undefined" && window.location.hash === "#debug-walk";
-
-
-function GalleryControls({
-  active,
-  isMobile,
-  mobileInput,
-  interactionToken,
-  entranceOpen,
-  internalDoorsOpen,
-  doorRegistry,
-  registry,
-  onEntranceClick,
-  onInternalDoorApproach,
-  onArtworkSelect,
-  onPointerLockChange,
-  onRoomChange,
-}: {
-  active: boolean;
-  isMobile: boolean;
-  mobileInput: MutableRefObject<MobileInput>;
-  interactionToken: number;
-  entranceOpen: boolean;
-  internalDoorsOpen: boolean[];
-  doorRegistry: MutableRefObject<Set<THREE.Object3D>>;
-  registry: MutableRefObject<Map<THREE.Object3D, Artwork>>;
-  onEntranceClick: () => void;
-  onInternalDoorApproach: (index: number) => void;
-  onArtworkSelect: (artwork: Artwork) => void;
-  onPointerLockChange: (locked: boolean) => void;
-  onRoomChange: (period: PeriodId | null) => void;
-}) {
-  const { camera, gl } = useThree();
-  const keys = useRef(new Set<string>());
-  // Arrival framing follows the tall, asymmetric entrance reference.
-  const yaw = useRef(-0.055);
-  const pitch = useRef(0.1);
-  const raycaster = useRef(new THREE.Raycaster());
-  const currentRoom = useRef<PeriodId | null>(null);
-  const processedInteraction = useRef(interactionToken);
-  // Última leitura do "olhar" do toque, para consumir apenas as deltas.
-  const consumedLook = useRef({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    const onKeyDown = (event: KeyboardEvent) => {
-      keys.current.add(event.code);
-      if (document.pointerLockElement === canvas && event.code.startsWith("Arrow")) {
-        event.preventDefault();
-      }
-    };
-    const onKeyUp = (event: KeyboardEvent) => keys.current.delete(event.code);
-    const onMouseMove = (event: MouseEvent) => {
-      if (document.pointerLockElement !== canvas) return;
-      yaw.current -= event.movementX * 0.0022;
-      pitch.current = THREE.MathUtils.clamp(
-        pitch.current - event.movementY * 0.0022,
-        -1.2,
-        1.2,
-      );
-    };
-    const onPointerLock = () => onPointerLockChange(document.pointerLockElement === canvas);
-    const interactAtReticle = () => {
-      raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-      const doorHit = raycaster.current.intersectObjects([...doorRegistry.current], false)[0];
-      if (doorHit && doorHit.distance < 35 && !entranceOpen) onEntranceClick();
-
-      const hit = raycaster.current.intersectObjects([...registry.current.keys()], false)[0];
-      const artwork = hit && hit.distance < 9 ? registry.current.get(hit.object) : undefined;
-      if (artwork) onArtworkSelect(artwork);
-    };
-    const onClick = () => {
-      if (isMobile) {
-        interactAtReticle();
-        return;
-      }
-      if (document.pointerLockElement !== canvas) {
-        interactAtReticle();
-        canvas.requestPointerLock();
-        return;
-      }
-      interactAtReticle();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("pointerlockchange", onPointerLock);
-    canvas.addEventListener("click", onClick);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("pointerlockchange", onPointerLock);
-      canvas.removeEventListener("click", onClick);
-    };
-  }, [
-    camera,
-    doorRegistry,
-    entranceOpen,
-    gl,
-    onArtworkSelect,
-    onEntranceClick,
-    onPointerLockChange,
-    isMobile,
-    registry,
-  ]);
-
-  useFrame((state, delta) => {
-    // O estado do frame é a fonte mutável correta: `useThree()` devolve valor de
-    // hook, que o React Compiler trata como imutável.
-    const camera = state.camera;
-    const canvas = state.gl.domElement;
-    if (isMobile) {
-      // Consome as deltas do buffer compartilhado sem escrever de volta: mobileInput
-      // é um prop, e mutá-lo é proibido pelas regras de hooks do React Compiler.
-      const look = mobileInput.current;
-      yaw.current -= (look.lookX - consumedLook.current.x) * 0.003;
-      pitch.current = THREE.MathUtils.clamp(
-        pitch.current - (look.lookY - consumedLook.current.y) * 0.003,
-        -1.2,
-        1.2,
-      );
-      consumedLook.current.x = look.lookX;
-      consumedLook.current.y = look.lookY;
-
-      if (interactionToken !== processedInteraction.current) {
-        processedInteraction.current = interactionToken;
-        raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const doorHit = raycaster.current.intersectObjects([...doorRegistry.current], false)[0];
-        if (doorHit && doorHit.distance < 35 && !entranceOpen) onEntranceClick();
-        const hit = raycaster.current.intersectObjects([...registry.current.keys()], false)[0];
-        const artwork = hit && hit.distance < 9 ? registry.current.get(hit.object) : undefined;
-        if (artwork) onArtworkSelect(artwork);
-      }
-    }
-    if (debugFreeRoam && document.pointerLockElement !== canvas) {
-      // Olhar sem pointer lock em automação/QA.
-      if (keys.current.has("KeyQ")) yaw.current += delta * 1.8;
-      if (keys.current.has("KeyE")) yaw.current -= delta * 1.8;
-    }
-    camera.rotation.set(pitch.current, yaw.current, 0, "YXZ");
-
-    internalDoorBoundaries.forEach((boundary, index) => {
-      if (!internalDoorsOpen[index] && Math.abs(camera.position.z - boundary) < 4.4) {
-        onInternalDoorApproach(index);
-      }
-    });
-
-    const room = rooms.find(
-      (item) => camera.position.z <= item.startZ && camera.position.z > item.endZ,
-    );
-    const nextRoom = room?.id ?? null;
-    if (nextRoom !== currentRoom.current) {
-      currentRoom.current = nextRoom;
-      onRoomChange(nextRoom);
-    }
-
-    if (!active || (!isMobile && !debugFreeRoam && document.pointerLockElement !== canvas)) return;
-
-    const forward = new THREE.Vector2(-Math.sin(yaw.current), -Math.cos(yaw.current));
-    const strafe = new THREE.Vector2(Math.cos(yaw.current), -Math.sin(yaw.current));
-    const direction = new THREE.Vector2();
-    if (keys.current.has("KeyW") || keys.current.has("ArrowUp")) direction.add(forward);
-    if (keys.current.has("KeyS") || keys.current.has("ArrowDown")) direction.sub(forward);
-    if (keys.current.has("KeyD") || keys.current.has("ArrowRight")) direction.add(strafe);
-    if (keys.current.has("KeyA") || keys.current.has("ArrowLeft")) direction.sub(strafe);
-    if (isMobile) {
-      direction.addScaledVector(forward, mobileInput.current.forward);
-      direction.addScaledVector(strafe, mobileInput.current.strafe);
-    }
-    if (direction.lengthSq() === 0) return;
-    direction.normalize().multiplyScalar(delta * 4.2);
-
-    const previousX = camera.position.x;
-    const previousZ = camera.position.z;
-    const outside = previousZ > ENTRANCE_DOOR_Z;
-    let nextX = THREE.MathUtils.clamp(
-      camera.position.x + direction.x,
-      outside ? -18 : -ROOM_HALF_WIDTH + 0.75,
-      outside ? 18 : ROOM_HALF_WIDTH - 0.75,
-    );
-    let nextZ = THREE.MathUtils.clamp(
-      camera.position.z + direction.y,
-      rooms.at(-1)!.endZ + 0.75,
-      42,
-    );
-
-    const exteriorResolved = resolveExteriorMovement(previousX, previousZ, nextX, nextZ);
-    nextX = exteriorResolved.x;
-    nextZ = exteriorResolved.z;
-
-    const entrancePassable = entranceOpen && Math.abs(nextX) < DOOR_HALF_WIDTH - 0.15;
-    if (!entrancePassable) {
-      nextZ = resolveBarrierZ(previousZ, nextZ, ENTRANCE_DOOR_Z, 0.35);
-    }
-
-    // Parede do prédio: passagem apenas pelo portal que leva ao corredor.
-    const portalPassable = Math.abs(nextX) < 2.3 - PLAYER_RADIUS;
-    if (!portalPassable) {
-      nextZ = resolveBarrierZ(previousZ, nextZ, BUILDING_PORTAL_Z, PLAYER_RADIUS);
-    }
-
-    // Parede frontal de Nuenen: passagem apenas pelo vão do corredor de transição.
-    const corridorEntrancePassable = Math.abs(nextX) < 2.3 - PLAYER_RADIUS;
-    if (!corridorEntrancePassable) {
-      nextZ = resolveBarrierZ(previousZ, nextZ, FIRST_ROOM_Z, PLAYER_RADIUS);
-    }
-
-    // Dentro do corredor, as paredes laterais mantêm o visitante no eixo central.
-    if (nextZ < BUILDING_PORTAL_Z && nextZ > FIRST_ROOM_Z) {
-      nextX = THREE.MathUtils.clamp(nextX, -2.3 + PLAYER_RADIUS, 2.3 - PLAYER_RADIUS);
-    }
-
-    internalDoorBoundaries.forEach((boundary, index) => {
-      const passable = internalDoorsOpen[index] && Math.abs(nextX) < DOOR_HALF_WIDTH - 0.15;
-      if (!passable) {
-        nextZ = resolveBarrierZ(previousZ, nextZ, boundary, 0.28);
-      }
-    });
-
-    if (nextZ < FIRST_ROOM_Z) {
-      const furnitureResolved = resolveRoomDecorMovement(previousX, previousZ, nextX, nextZ);
-      nextX = furnitureResolved.x;
-      nextZ = furnitureResolved.z;
-    }
-
-    camera.position.x = nextX;
-    camera.position.z = nextZ;
-    camera.position.y = 1.7;
-  });
-
-  return null;
 }
 
 function SlidingDoors({
@@ -332,7 +96,7 @@ function SlidingDoors({
   }, [register]);
 
   useFrame((_, delta) => {
-    const target = open ? 2.5 : 0.9;
+    const target = open ? 2.5 : DOOR_PANEL_WIDTH / 2;
     if (left.current) left.current.position.x = THREE.MathUtils.damp(left.current.position.x, -target, 4.5, delta);
     if (right.current) right.current.position.x = THREE.MathUtils.damp(right.current.position.x, target, 4.5, delta);
   });
@@ -342,16 +106,16 @@ function SlidingDoors({
   const metalness = entrance ? 0.12 : 0.65;
   const roughness = entrance ? 0.12 : 0.14;
   return <group position={[0, 0, z]}>
-    <group ref={left} position={[-0.9, 0, 0]}>
-      <mesh ref={leftPanel} position={[0, 1.9, 0]}>
-        <boxGeometry args={[1.8, 3.8, 0.13]} />
+    <group ref={left} position={[-DOOR_PANEL_WIDTH / 2, 0, 0]}>
+      <mesh ref={leftPanel} position={[0, DOOR_PANEL_HEIGHT / 2, 0]}>
+        <boxGeometry args={[DOOR_PANEL_WIDTH, DOOR_PANEL_HEIGHT, DOOR_PANEL_DEPTH]} />
         <meshStandardMaterial color={color} transparent opacity={opacity} metalness={metalness} roughness={roughness} />
       </mesh>
       {entrance && <EntranceDoorFrame />}
     </group>
-    <group ref={right} position={[0.9, 0, 0]}>
-      <mesh ref={rightPanel} position={[0, 1.9, 0]}>
-        <boxGeometry args={[1.8, 3.8, 0.13]} />
+    <group ref={right} position={[DOOR_PANEL_WIDTH / 2, 0, 0]}>
+      <mesh ref={rightPanel} position={[0, DOOR_PANEL_HEIGHT / 2, 0]}>
+        <boxGeometry args={[DOOR_PANEL_WIDTH, DOOR_PANEL_HEIGHT, DOOR_PANEL_DEPTH]} />
         <meshStandardMaterial color={color} transparent opacity={opacity} metalness={metalness} roughness={roughness} />
       </mesh>
       {entrance && <EntranceDoorFrame />}
@@ -365,11 +129,11 @@ function SlidingDoors({
 
 function EntranceDoorFrame() {
   return <group>
-    {[-0.88, 0.88].map((x) => <mesh key={x} position={[x, 1.9, 0.075]}>
-      <boxGeometry args={[0.045, 3.8, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
+    {[-1, 1].map((side) => <mesh key={side} position={[side * (DOOR_PANEL_WIDTH / 2 - 0.02), DOOR_PANEL_HEIGHT / 2, 0.075]}>
+      <boxGeometry args={[0.045, DOOR_PANEL_HEIGHT, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
     </mesh>)}
-    {[0.05, 3.75].map((y) => <mesh key={y} position={[0, y, 0.075]}>
-      <boxGeometry args={[1.8, 0.065, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
+    {[0.05, DOOR_PANEL_HEIGHT - 0.05].map((y) => <mesh key={y} position={[0, y, 0.075]}>
+      <boxGeometry args={[DOOR_PANEL_WIDTH, 0.065, 0.065]} /><meshStandardMaterial color="#a1a8a5" metalness={0.72} roughness={0.3} />
     </mesh>)}
   </group>;
 }
@@ -797,11 +561,11 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
 
     {/* Paredes laterais em cinza-escuro museológico elegante */}
     <mesh position={[-ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
-      <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
+      <boxGeometry args={[SIDE_WALL_THICKNESS, ROOM_HEIGHT, room.length]} />
       <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
     <mesh position={[ROOM_HALF_WIDTH, ROOM_HEIGHT / 2, room.centerZ]}>
-      <boxGeometry args={[0.3, ROOM_HEIGHT, room.length]} />
+      <boxGeometry args={[SIDE_WALL_THICKNESS, ROOM_HEIGHT, room.length]} />
       <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
 
@@ -830,25 +594,25 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
     {/* Parede frontal na primeira sala (Nuenen) com vão para o corredor de transição */}
     {index === 0 && (
       <>
-        <mesh position={[-(ROOM_HALF_WIDTH + 2.3) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, ROOM_HEIGHT, 0.28]} />
+        <mesh position={[-(ROOM_HALF_WIDTH + CORRIDOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - CORRIDOR_HALF_WIDTH, ROOM_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
-        <mesh position={[(ROOM_HALF_WIDTH + 2.3) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, ROOM_HEIGHT, 0.28]} />
+        <mesh position={[(ROOM_HALF_WIDTH + CORRIDOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - CORRIDOR_HALF_WIDTH, ROOM_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
-        <mesh position={[0, (ROOM_HEIGHT + 4.6) / 2, FIRST_ROOM_Z]}>
-          <boxGeometry args={[4.6, ROOM_HEIGHT - 4.6, 0.28]} />
+        <mesh position={[0, (ROOM_HEIGHT + CORRIDOR_HEIGHT) / 2, FIRST_ROOM_Z]}>
+          <boxGeometry args={[CORRIDOR_HALF_WIDTH * 2, ROOM_HEIGHT - CORRIDOR_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         {/* Rodapés na face interna de Nuenen */}
-        <mesh position={[-(ROOM_HALF_WIDTH + 2.3) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, 0.16, 0.04]} />
+        <mesh position={[-(ROOM_HALF_WIDTH + CORRIDOR_HALF_WIDTH) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - CORRIDOR_HALF_WIDTH, 0.16, 0.04]} />
           <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
         </mesh>
-        <mesh position={[(ROOM_HALF_WIDTH + 2.3) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - 2.3, 0.16, 0.04]} />
+        <mesh position={[(ROOM_HALF_WIDTH + CORRIDOR_HALF_WIDTH) / 2, 0.08, FIRST_ROOM_Z - 0.16]}>
+          <boxGeometry args={[ROOM_HALF_WIDTH - CORRIDOR_HALF_WIDTH, 0.16, 0.04]} />
           <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
         </mesh>
       </>
@@ -858,7 +622,7 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
     {last ? (
       <>
         <mesh position={[0, ROOM_HEIGHT / 2, room.endZ]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, 0.28]} />
+          <boxGeometry args={[ROOM_HALF_WIDTH * 2, ROOM_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         <mesh position={[0, 0.08, room.endZ + 0.16]}>
@@ -869,15 +633,15 @@ function Room({ room, last, index }: { room: RoomConfig; last: boolean; index: n
     ) : (
       <>
         <mesh position={[-(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
+          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         <mesh position={[(ROOM_HALF_WIDTH + DOOR_HALF_WIDTH) / 2, ROOM_HEIGHT / 2, room.endZ]}>
-          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, 0.28]} />
+          <boxGeometry args={[ROOM_HALF_WIDTH - DOOR_HALF_WIDTH, ROOM_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
-        <mesh position={[0, 5.25, room.endZ]}>
-          <boxGeometry args={[DOOR_HALF_WIDTH * 2, ROOM_HEIGHT - 4, 0.28]} />
+        <mesh position={[0, (ROOM_HEIGHT + INTERNAL_DOORWAY_HEIGHT) / 2, room.endZ]}>
+          <boxGeometry args={[DOOR_HALF_WIDTH * 2, ROOM_HEIGHT - INTERNAL_DOORWAY_HEIGHT, PARTITION_THICKNESS]} />
           <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
         </mesh>
         {/* Rodapés na parede divisória */}
@@ -906,9 +670,10 @@ function TransitionCorridor() {
   const length = BUILDING_PORTAL_Z - FIRST_ROOM_Z;
   const centerZ = (BUILDING_PORTAL_Z + FIRST_ROOM_Z) / 2;
   const corridorParquet = useChevronParquet(3, Math.round(length * 0.55));
+  const corridorWallX = CORRIDOR_HALF_WIDTH + CORRIDOR_WALL_THICKNESS / 2;
   return <group>
     <mesh position={[0, 0.03, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[4.6, length]} />
+      <planeGeometry args={[CORRIDOR_HALF_WIDTH * 2, length]} />
       <meshStandardMaterial
         map={corridorParquet?.map}
         bumpMap={corridorParquet?.bumpMap}
@@ -917,25 +682,25 @@ function TransitionCorridor() {
         roughness={0.62}
       />
     </mesh>
-    <mesh position={[-2.45, 2.3, centerZ]}>
-      <boxGeometry args={[0.3, 4.6, length]} />
+    <mesh position={[-corridorWallX, CORRIDOR_HEIGHT / 2, centerZ]}>
+      <boxGeometry args={[CORRIDOR_WALL_THICKNESS, CORRIDOR_HEIGHT, length]} />
       <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
-    <mesh position={[2.45, 2.3, centerZ]}>
-      <boxGeometry args={[0.3, 4.6, length]} />
+    <mesh position={[corridorWallX, CORRIDOR_HEIGHT / 2, centerZ]}>
+      <boxGeometry args={[CORRIDOR_WALL_THICKNESS, CORRIDOR_HEIGHT, length]} />
       <meshStandardMaterial color={MUSEUM_WALL_COLOR} roughness={0.94} />
     </mesh>
     {/* Rodapés do corredor */}
-    <mesh position={[-2.28, 0.11, centerZ]}>
+    <mesh position={[-(CORRIDOR_HALF_WIDTH - 0.02), 0.11, centerZ]}>
       <boxGeometry args={[0.04, 0.16, length]} />
       <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
     </mesh>
-    <mesh position={[2.28, 0.11, centerZ]}>
+    <mesh position={[CORRIDOR_HALF_WIDTH - 0.02, 0.11, centerZ]}>
       <boxGeometry args={[0.04, 0.16, length]} />
       <meshStandardMaterial color={MUSEUM_BASEBOARD_COLOR} roughness={0.78} />
     </mesh>
-    <mesh position={[0, 4.6, centerZ]}>
-      <boxGeometry args={[4.9, 0.2, length]} />
+    <mesh position={[0, CORRIDOR_HEIGHT, centerZ]}>
+      <boxGeometry args={[corridorWallX * 2, 0.2, length]} />
       <meshStandardMaterial color={MUSEUM_CEILING_COLOR} roughness={0.88} />
     </mesh>
     {[1.2, 4.3, 7.4].map((offset) => <mesh key={offset} position={[0, 4.43, FIRST_ROOM_Z + offset]}>
@@ -1009,6 +774,7 @@ export function MuseumScene({
   isMobile,
   mobileInput,
   interactionToken,
+  viewMode,
   onArtworkSelect,
   onPointerLockChange,
   onRoomChange,
@@ -1039,6 +805,7 @@ export function MuseumScene({
       isMobile={isMobile}
       mobileInput={mobileInput}
       interactionToken={interactionToken}
+      viewMode={viewMode}
       entranceOpen={entranceOpen}
       internalDoorsOpen={stableInternalDoors}
       doorRegistry={doorRegistry}

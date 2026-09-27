@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import Link from "next/link";
 import { Canvas } from "@react-three/fiber";
 import { ArtworkModal } from "@/components/artwork-modal";
-import { MuseumScene, type MobileInput } from "./museum-scene";
+import { MuseumScene, type MobileInput, type ViewMode } from "./museum-scene";
 import type { Artwork } from "@/data/artworks";
 import { periods, type PeriodId } from "@/data/periods";
 
@@ -15,6 +15,10 @@ export function MuseumExperience() {
   const [interactionToken, setInteractionToken] = useState(0);
   const [joystick, setJoystick] = useState({ x: 0, y: 0 });
   const [currentRoom, setCurrentRoom] = useState<PeriodId | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("first-person");
+  const thirdPerson = viewMode === "third-person";
+  const toggleViewMode = () =>
+    setViewMode((mode) => (mode === "first-person" ? "third-person" : "first-person"));
   const mobileInput = useRef<MobileInput>({ forward: 0, strafe: 0, lookX: 0, lookY: 0 });
   const lookPointer = useRef<{ id: number; x: number; y: number } | null>(null);
   const currentPeriod = periods.find((period) => period.id === currentRoom);
@@ -24,6 +28,22 @@ export function MuseumExperience() {
     document.addEventListener("pointerlockchange", onChange);
     return () => document.removeEventListener("pointerlockchange", onChange);
   }, []);
+
+  // Atalho V: alterna 1ª/3ª pessoa sem soltar o pointer lock.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "KeyV" || event.repeat || selected) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      ) return;
+      setViewMode((mode) => (mode === "first-person" ? "third-person" : "first-person"));
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selected]);
 
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse)");
@@ -70,6 +90,7 @@ export function MuseumExperience() {
           isMobile={isMobile}
           mobileInput={mobileInput}
           interactionToken={interactionToken}
+          viewMode={viewMode}
           onArtworkSelect={(artwork) => {
             document.exitPointerLock?.();
             setSelected(artwork);
@@ -111,7 +132,8 @@ export function MuseumExperience() {
               mova o <strong className="text-amber-200">mouse</strong> para olhar ·
               as portas entre as salas abrem automaticamente ·{" "}
               <strong className="text-amber-200">clique num quadro</strong> para ver a
-              história · <strong className="text-amber-200">ESC</strong> para soltar o
+              história · <strong className="text-amber-200">V</strong> alterna entre 1ª e
+              3ª pessoa · <strong className="text-amber-200">ESC</strong> para soltar o
               cursor
             </p>
           </div>
@@ -122,7 +144,7 @@ export function MuseumExperience() {
         <>
           <div className="pointer-events-none absolute inset-x-0 bottom-40 z-10 flex justify-center px-5">
             <div className="rounded-lg border border-white/10 bg-[#0b1020]/80 px-4 py-2 text-center text-xs text-amber-100/75 backdrop-blur">
-              Arraste à direita para olhar. Use o joystick para caminhar. Aponte a mira e toque em Interagir.
+              Arraste à direita para olhar. Use o joystick para caminhar. Aponte a mira e toque em Interagir. O botão no alto troca entre 1ª e 3ª pessoa.
             </div>
           </div>
 
@@ -186,6 +208,23 @@ export function MuseumExperience() {
           ← Voltar ao site
         </Link>
       </div>
+
+      {/* Alternância de visão: 1ª pessoa ↔ personagem visível (3ª pessoa) */}
+      {!selected && (
+        <div className="absolute right-4 top-4 z-20">
+          <button
+            type="button"
+            onClick={toggleViewMode}
+            aria-pressed={thirdPerson}
+            aria-label={thirdPerson ? "Voltar para a visão em 1ª pessoa" : "Ver o personagem em 3ª pessoa"}
+            title="Alternar visão (tecla V)"
+            className="rounded-lg border border-amber-200/40 bg-[#0b1020]/80 px-4 py-2 text-sm text-amber-100/90 backdrop-blur transition-colors hover:text-amber-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300 active:scale-95"
+          >
+            {thirdPerson ? "1ª pessoa" : "3ª pessoa"}
+            {!isMobile && <span className="ml-2 text-xs text-amber-100/50">V</span>}
+          </button>
+        </div>
+      )}
 
       <ArtworkModal artwork={selected} onClose={() => setSelected(null)} />
     </div>

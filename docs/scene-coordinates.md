@@ -23,6 +23,13 @@ abaixo foram conferidos no código em `src/components/museum3d/`.
 | `ROOM_HALF_WIDTH` | `8.5` | Meia-largura útil de cada sala |
 | `ROOM_HEIGHT` | `6.5` | Pé-direito das galerias |
 | `DOOR_HALF_WIDTH` | `1.65` | Meio-vão das portas internas entre salas |
+| `INTERNAL_DOORWAY_HEIGHT` | `4` | Altura livre do vão das portas internas (verga acima) |
+| `SIDE_WALL_THICKNESS` | `0.3` | Espessura das paredes laterais das galerias |
+| `PARTITION_THICKNESS` | `0.28` | Espessura das divisórias (frente de Nuenen, entre salas, fundo) |
+| `CORRIDOR_HALF_WIDTH` | `2.3` | Meia-largura livre do corredor e do vão para Nuenen |
+| `CORRIDOR_WALL_THICKNESS` | `0.3` | Espessura das paredes do corredor |
+| `CORRIDOR_HEIGHT` | `4.6` | Pé-direito do corredor e altura do vão para Nuenen |
+| `DOOR_PANEL_WIDTH` × `DOOR_PANEL_HEIGHT` × `DOOR_PANEL_DEPTH` | `1.8 × 3.8 × 0.13` | Folha das portas deslizantes |
 | `PLAYER_RADIUS` | `0.42` | Raio de colisão do visitante |
 | `ROOM_LENGTHS` | Nuenen `12`, Paris `13.5`, Arles `24.75`, Saint-Rémy `15.75`, Auvers `18` | Comprimento fixo de cada sala ao longo de −Z |
 | `SIDE_ARTWORK_FIRST_OFFSET` | `2.7` | Distância do início da sala até a primeira tela lateral |
@@ -98,6 +105,25 @@ cai de `x = -4.35` para `x = +8.1` (mais alta à esquerda, mais baixa à direita
   clipes `CharacterArmature|Idle_Neutral` e `CharacterArmature|Walk`;
   **sem root motion** (a locomoção é feita por código).
 - Sentido de caminhada calibrado para `timeScale ≈ 0.75` a ~0.75 m/s.
+
+## Câmera em 1ª e 3ª pessoa (`scene/camera-rig.ts`)
+
+- A **posição do visitante** (`x`, `z`) é a fonte de verdade para colisões, salas,
+  portas e mira; a câmera deriva dela a cada quadro.
+- 1ª pessoa: olho em `y = 1.7` sobre o visitante.
+- 3ª pessoa (sobre o ombro): pivô em `y = 1.55`, ombro `0.45` à direita, recuo
+  nominal `2.1` com leve elevação. Alterna com o botão do HUD ou a tecla `V`.
+- O recuo marcha em passos de `0.04` e para a `0.12` de qualquer volume
+  (paredes, tetos, divisórias, portas fechadas, fundo do átrio, alas do prédio,
+  vidros e troncos). A folga precisa ficar abaixo de `0.28 − 0.14` para o pivô
+  nunca nascer bloqueado junto a uma porta fechada.
+- Abaixo de `0.65` entre câmera e pivô, o avatar é ocultado.
+- Os volumes externos saem de `EXTERIOR_CAMERA_OBSTACLES` (`scene/collisions.ts`),
+  derivados dos mesmos dados das colisões do visitante.
+- Os volumes internos (`buildArchitectureObstacles`) recebem as medidas por
+  `MuseumCameraLayout`, montado em `gallery-controls.tsx` a partir das constantes
+  acima, de `ATRIUM_BACK_Z` (`museum-exterior.tsx`) e de `EAST_WING_MIN_X`
+  (`scene/collisions.ts`) — as mesmas que desenham paredes, vãos e portas.
 
 ## Casario de Amsterdã
 

@@ -11,6 +11,21 @@ export const FIRST_ROOM_Z = -1.5;
 export const ROOM_HALF_WIDTH = 8.5;
 export const ROOM_HEIGHT = 6.5;
 export const DOOR_HALF_WIDTH = 1.65;
+/** Altura livre do vão das portas internas; acima dele fica a verga. */
+export const INTERNAL_DOORWAY_HEIGHT = 4;
+/** Espessura das paredes laterais das galerias. */
+export const SIDE_WALL_THICKNESS = 0.3;
+/** Espessura das divisórias (frente de Nuenen, entre salas e fundo). */
+export const PARTITION_THICKNESS = 0.28;
+/** Meia-largura livre do corredor de transição (face interna das paredes). */
+export const CORRIDOR_HALF_WIDTH = 2.3;
+export const CORRIDOR_WALL_THICKNESS = 0.3;
+/** Pé-direito do corredor e altura do vão para a primeira sala. */
+export const CORRIDOR_HEIGHT = 4.6;
+/** Folha das portas deslizantes (entrada e internas). */
+export const DOOR_PANEL_WIDTH = 1.8;
+export const DOOR_PANEL_HEIGHT = 3.8;
+export const DOOR_PANEL_DEPTH = 0.13;
 export const BACK_WALL_OUTER_MARGIN = ROOM_HALF_WIDTH * 0.12;
 export const BACK_WALL_DOOR_MARGIN = ROOM_HALF_WIDTH * 0.09;
 export const BACK_WALL_ARTWORK_PITCH = 2.4;

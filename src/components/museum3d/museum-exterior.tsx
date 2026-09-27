@@ -14,7 +14,8 @@ type Surface = "stone" | "paving" | "brick" | "masonry";
 const PANEL_COUNT = 26;
 const ATRIUM_RADIUS_X = 8.1;
 const ATRIUM_RADIUS_Z = 7.4;
-const ATRIUM_BACK_Z = 7.4;
+/** Fundo do átrio de vidro; também limita a câmera em 3ª pessoa. */
+export const ATRIUM_BACK_Z = 7.4;
 const ATRIUM_MIN_X = -4.35;
 const ATRIUM_MIN_ANGLE = Math.asin(ATRIUM_MIN_X / ATRIUM_RADIUS_X);
 const OPENING_ANGLE = Math.asin(1.85 / ATRIUM_RADIUS_X);
